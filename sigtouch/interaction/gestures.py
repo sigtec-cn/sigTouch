@@ -163,8 +163,33 @@ class GestureStateMachine:
 
     # ---- Task 7 填充下面两个方法 ----
     def _check_push(self, hand: HandFrame, t_ms: int, out: list[Event]) -> None:
-        pass
+        """张开手掌、掌心朝屏,包围盒面积在窗口内快速增大 → 退格。"""
+        if not (all(F.fingers_extended(hand)) and F.palm_facing_camera(hand)):
+            self._push_history.clear()
+            return
+        area = F.bbox_area(hand)
+        window = self._c.get("interaction/push_window_ms")
+        self._push_history.append((t_ms, area))
+        self._push_history = [(t, a) for t, a in self._push_history
+                              if t_ms - t <= window]
+        base = min(a for _, a in self._push_history)
+        if base > 0 and area / base >= self._c.get("interaction/push_area_ratio") \
+                and self._cooled(EventKind.BACKSPACE, t_ms):
+            self._emit(out, EventKind.BACKSPACE, t_ms, cooldown=True)
+            if out and out[-1].kind is EventKind.BACKSPACE:
+                self.feedback = "⌫"
+            self._push_history.clear()
 
     def _update_ok(self, hand: HandFrame, t_ms: int, out: list[Event],
                    idx_r: float, exit_: float, others_ext: bool) -> None:
-        self._to(_State.IDLE, t_ms)
+        pose_held = idx_r < exit_ and others_ext
+        if not pose_held:
+            self._to(_State.IDLE, t_ms)  # 姿态破坏 → 回位并重新武装
+            return
+        if self._state is _State.OK_PENDING and \
+                t_ms - self._state_t >= self._c.get("interaction/ok_hold_ms") and \
+                self._cooled(EventKind.ENTER, t_ms):
+            self._emit(out, EventKind.ENTER, t_ms, cooldown=True)
+            if out and out[-1].kind is EventKind.ENTER:
+                self.feedback = "⏎"
+            self._to(_State.OK_FIRED, t_ms)  # 已触发,保持姿态不重复
