@@ -28,43 +28,38 @@ def _with(hand: HandFrame, changes: dict) -> HandFrame:
     return HandFrame(landmarks=lms, handedness=hand.handedness)
 
 
-_CURL = {12: (0.50, 0.55), 16: (0.53, 0.55), 20: (0.56, 0.56)}  # 中/无名/小指弯曲
+def _get_scale_dx_dy(**kw):
+    """Extract scale, dx, dy from kwargs with defaults."""
+    return kw.get('scale', 1.0), kw.get('dx', 0.0), kw.get('dy', 0.0)
+
+
+def _transform_landmark(x_base, y_base, scale, dx, dy):
+    """Transform a base landmark position using scale and offset."""
+    return ((x_base - _CX) * scale + _CX + dx, (y_base - _CY) * scale + _CY + dy)
 
 
 def pinch_index(**kw) -> HandFrame:
     """拇指+食指捏合,其余三指弯曲(普通捏合,区别于 OK)。"""
     h = open_hand(**kw)
-    scale = kw.get('scale', 1.0)
-    dx = kw.get('dx', 0.0)
-    dy = kw.get('dy', 0.0)
+    scale, dx, dy = _get_scale_dx_dy(**kw)
     ix, iy, _ = h.landmarks[8]
 
-    # Transform curled positions using the same scale/offset
-    def transform(x_base, y_base):
-        return ((x_base - _CX) * scale + _CX + dx, (y_base - _CY) * scale + _CY + dy)
-
     return _with(h, {4: (ix - 0.005 * scale, iy),
-                     12: transform(0.50, 0.55),
-                     16: transform(0.53, 0.55),
-                     20: transform(0.56, 0.56)})
+                     12: _transform_landmark(0.50, 0.55, scale, dx, dy),
+                     16: _transform_landmark(0.53, 0.55, scale, dx, dy),
+                     20: _transform_landmark(0.56, 0.56, scale, dx, dy)})
 
 
 def pinch_middle(**kw) -> HandFrame:
     """拇指+中指捏合,食指/无名指/小指弯曲。"""
     h = open_hand(**kw)
-    scale = kw.get('scale', 1.0)
-    dx = kw.get('dx', 0.0)
-    dy = kw.get('dy', 0.0)
+    scale, dx, dy = _get_scale_dx_dy(**kw)
     mx, my, _ = h.landmarks[12]
 
-    # Transform curled positions using the same scale/offset
-    def transform(x_base, y_base):
-        return ((x_base - _CX) * scale + _CX + dx, (y_base - _CY) * scale + _CY + dy)
-
     return _with(h, {4: (mx - 0.005 * scale, my),
-                     8: transform(0.47, 0.55),
-                     16: transform(0.53, 0.55),
-                     20: transform(0.56, 0.56)})
+                     8: _transform_landmark(0.47, 0.55, scale, dx, dy),
+                     16: _transform_landmark(0.53, 0.55, scale, dx, dy),
+                     20: _transform_landmark(0.56, 0.56, scale, dx, dy)})
 
 
 def three_pinch(**kw) -> HandFrame:
@@ -72,10 +67,11 @@ def three_pinch(**kw) -> HandFrame:
     覆盖坐标相对变换后的手计算,保证 dx/dy/scale 参数对指尖同样生效
     (滚动测试依赖 dy 平移让食指尖 y 逐帧变化)。"""
     h = open_hand(**kw)
+    scale, _, _ = _get_scale_dx_dy(**kw)
     ix, iy, _ = h.landmarks[8]   # 食指尖(已变换)
     wx, wy, _ = h.landmarks[0]   # 手腕(已变换)
-    return _with(h, {4: (ix + 0.005, iy), 12: (ix + 0.02, iy + 0.005),
-                     16: (wx + 0.03, wy - 0.05), 20: (wx + 0.06, wy - 0.04)})
+    return _with(h, {4: (ix + 0.005 * scale, iy), 12: (ix + 0.02 * scale, iy + 0.005 * scale),
+                     16: (wx + 0.03 * scale, wy - 0.05 * scale), 20: (wx + 0.06 * scale, wy - 0.04 * scale)})
 
 
 def ok_pose(**kw) -> HandFrame:
