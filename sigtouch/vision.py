@@ -33,6 +33,15 @@ class VisionThread(QThread):
         self._running = False
         self.wait(3000)
 
+    def _interruptible_sleep(self, seconds: float) -> None:
+        """分片睡眠,stop() 置 _running=False 后最多 0.1s 内退出。"""
+        deadline = time.monotonic() + seconds
+        while self._running:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            time.sleep(min(0.1, remaining))
+
     def _open_camera(self):
         cap = cv2.VideoCapture(self._cfg.get("camera/index"))
         if not cap.isOpened():
@@ -56,7 +65,7 @@ class VisionThread(QThread):
                         if not had_error:
                             self.camera_error.emit("无法打开摄像头")
                             had_error = True
-                        time.sleep(backoff)
+                        self._interruptible_sleep(backoff)
                         backoff = min(backoff * 2.0, 10.0)
                         continue
                     backoff = 1.0
@@ -69,6 +78,8 @@ class VisionThread(QThread):
                     cap = None
                     self.camera_error.emit("摄像头读取失败,重连中")
                     had_error = True
+                    self._interruptible_sleep(backoff)
+                    backoff = min(backoff * 2.0, 10.0)
                     continue
                 frame = cv2.flip(frame, 1)  # 镜像:下游一律假设已翻转
                 t_ms = int(time.monotonic() * 1000)
@@ -77,7 +88,7 @@ class VisionThread(QThread):
                 if self._preview:
                     self.preview_frame.emit(frame)
                 if self._idle:
-                    time.sleep(0.2)  # 挂起态 ~5fps,仅维持人脸检测
+                    self._interruptible_sleep(0.2)  # 挂起态 ~5fps,仅维持人脸检测
         finally:
             if cap is not None:
                 cap.release()
