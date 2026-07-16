@@ -48,6 +48,7 @@ class PerceptionPipeline:
 
         raw_d = None
         fres = self._face.detect_for_video(image, t_ms)
+        face_detected = bool(fres.face_landmarks)
         if fres.face_landmarks:
             f = fres.face_landmarks[0]
             r, l = f[_RIGHT_IRIS_CENTER], f[_LEFT_IRIS_CENTER]
@@ -58,7 +59,7 @@ class PerceptionPipeline:
 
         smoothed = self._smoother.update(raw_d) if self._seen_face else None
         return FrameResult(timestamp_ms=t_ms, hand=hand, face_distance_m=smoothed,
-                           face_present=raw_d is not None)
+                           face_present=face_detected)
 
     def close(self) -> None:
         self._hands.close()
