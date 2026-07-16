@@ -1,0 +1,22 @@
+[project]
+name = "sigtouch"
+version = "0.1.0"
+description = "Camera-based hand gesture control with translucent hand overlay"
+license = { text = "MIT" }
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "PySide6>=6.6",
+    "mediapipe>=0.10.14",
+    "opencv-python>=4.9",
+    "pynput>=1.7.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyinstaller>=6.6"]
+
+[project.scripts]
+sigtouch = "sigtouch.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
