@@ -35,3 +35,11 @@ def test_pinch_freezes_cursor_then_resumes():
     assert still == (960, 540)
     moved = m.update((0.7, 0.5), True, 1200)    # 冻结结束(>1000+150)
     assert moved[0] > 960                       # 恢复跟随
+
+
+def test_first_call_pinch_freezes_at_anchor_not_center():
+    m = CursorMapper(1920, 1080, margin=0.15, freeze_ms=150)
+    first = m.update((0.7, 0.5), True, 0)
+    assert first[0] > 1400  # 映射到真实锚点(≈1508),而不是屏幕中心 960
+    still = m.update((0.2, 0.5), True, 100)
+    assert still == first   # 冻结期内保持首帧位置

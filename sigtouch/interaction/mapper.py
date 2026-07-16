@@ -13,7 +13,7 @@ class CursorMapper:
         self._fy = OneEuroFilter(min_cutoff, beta)
         self._freeze_until = -1
         self._was_pinching = False
-        self._last = (screen_w // 2, screen_h // 2)
+        self._last: tuple[int, int] | None = None
 
     def _norm(self, v: float) -> float:
         span = 1.0 - 2.0 * self._margin
@@ -27,7 +27,7 @@ class CursorMapper:
 
         x = self._fx.apply(self._norm(anchor[0]) * (self._w - 1), t_ms)
         y = self._fy.apply(self._norm(anchor[1]) * (self._h - 1), t_ms)
-        if t_ms < self._freeze_until:
+        if t_ms < self._freeze_until and self._last is not None:
             return self._last  # 冻结期:滤波器照常喂数据,输出保持
         self._last = (round(x), round(y))
         return self._last
