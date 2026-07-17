@@ -50,6 +50,19 @@ def test_all_granted_emitted_once_on_rising_edge(qapp):
     assert w._status_labels[K.ACCESSIBILITY].text() == "✓"
 
 
+def test_poll_timer_stops_when_granted_or_hidden(qapp):
+    state = {K.CAMERA: True, K.ACCESSIBILITY: False, K.INPUT_MONITORING: True}
+    w = _wizard(state, [])
+    assert w._timer.isActive() is True          # 构造时未全就绪 → 轮询中
+    state[K.ACCESSIBILITY] = True
+    w.refresh()
+    assert w._timer.isActive() is False         # 全就绪 → 停
+    state[K.ACCESSIBILITY] = False
+    w._was_all_granted = False
+    w.show(); w.hide()
+    assert w._timer.isActive() is False         # 隐藏 → 停
+
+
 def test_tray_permission_state_and_menu(qapp):
     from sigtouch.ui.tray import TrayController
     t = TrayController()

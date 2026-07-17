@@ -84,3 +84,15 @@ class PermissionWizard(QDialog):
         elif not granted:
             self._banner.setText("")
         self._was_all_granted = granted
+        if granted:
+            self._timer.stop()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self.refresh()
+        if not self._was_all_granted:
+            self._timer.start(_POLL_MS)
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._timer.stop()
