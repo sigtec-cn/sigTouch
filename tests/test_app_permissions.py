@@ -105,6 +105,38 @@ def test_capabilities_activate_after_grant_without_restart(qapp, monkeypatch):
     assert a._perm_timer.isActive() is False       # 全就绪停轮询
 
 
+def test_wizard_rising_edge_activates_app(qapp, monkeypatch):
+    state = {K.CAMERA: True, K.ACCESSIBILITY: False, K.INPUT_MONITORING: False}
+    _patch_perms(monkeypatch, state)
+    created = []
+
+    class FakeInjector:
+        def __init__(self):
+            created.append(self)
+
+        def move(self, x, y):
+            pass
+
+        def dispatch(self, ev):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    hotkey_calls = []
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey",
+                        lambda self: hotkey_calls.append(1))
+    a = _make_app(monkeypatch)
+    assert created == [] and hotkey_calls == []   # 降级期均未构造/启动
+
+    state[K.ACCESSIBILITY] = True
+    state[K.INPUT_MONITORING] = True
+    a._wizard.refresh()                            # 经向导信号路径,而非直接调用
+    assert len(created) == 1
+    assert a._perm_timer.isActive() is False
+
+
 def test_full_permissions_start_is_unchanged(qapp, monkeypatch):
     state = {k: True for k in K}
     _patch_perms(monkeypatch, state)
