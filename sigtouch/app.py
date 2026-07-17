@@ -1,5 +1,6 @@
 # sigtouch/app.py
 """入口与装配:视觉线程 → 手势/映射 → 注入/渲染,托盘控制,看门狗,挂起门。"""
+import logging
 import sys
 import time
 
@@ -18,6 +19,8 @@ from sigtouch.ui.preview import PreviewWindow
 from sigtouch.ui.settings_dialog import SettingsDialog
 from sigtouch.ui.tray import TrayController
 from sigtouch.vision import VisionThread
+
+_log = logging.getLogger(__name__)
 
 
 class SuspendGate:
@@ -140,7 +143,8 @@ class SigTouchApp(QObject):
                 {combo: self._hotkey_bridge.pressed.emit})
             self._hotkey_listener.start()
         except Exception:
-            pass  # 无效组合或系统权限缺失:禁用快捷键,不阻塞启动
+            _log.warning("全局快捷键注册失败(组合: %r),已禁用", combo,
+                        exc_info=True)  # 无效组合或系统权限缺失:禁用快捷键,不阻塞启动
 
     # ---- 每帧主流程 ----
     def _on_result(self, result) -> None:
@@ -188,11 +192,15 @@ class SigTouchApp(QObject):
         self._vision.set_preview(True)
 
     def _on_settings_applied(self) -> None:
+        # 先释放:_build_interaction() 会丢弃旧 GestureStateMachine,若正处于
+        # DRAGGING 状态 DRAG_END 将永远不会发出,导致鼠标左键卡在按下状态。
+        self._injector.release_all()
         from sigtouch.platformsupport.autostart import set_autostart
         try:
             set_autostart(self._cfg.get("general/autostart"))
         except OSError:
-            pass  # 无权限等场景不阻塞设置应用
+            _log.warning("设置开机自启失败(权限不足等),不阻塞设置应用",
+                        exc_info=True)
         self._build_interaction()
         self._overlay.apply_screen()
         self._setup_hotkey()
