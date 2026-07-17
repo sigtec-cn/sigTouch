@@ -9,7 +9,8 @@ a = Analysis(
     ["../sigtouch/__main__.py"],
     pathex=[".."],
     datas=datas,
-    hiddenimports=[],
+    # darwin 权限检测的 pyobjc 框架;其他平台构建时仅产生 not-found 警告
+    hiddenimports=["AVFoundation", "ApplicationServices"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
