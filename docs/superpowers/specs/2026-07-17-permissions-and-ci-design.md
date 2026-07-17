@@ -18,7 +18,7 @@
 |---|---|
 | 分发渠道 | GitHub Releases(tag `v*` 触发);GitHub Packages 不适用 |
 | 权限未就绪时的应用状态 | 降级运行 + 自动激活:引导窗可关、托盘存活、每 2s 自动重检、就绪即激活 |
-| macOS 权限检测机制 | 方案 A:`pyobjc-framework-AVFoundation`(仅 darwin)查摄像头授权;ctypes 调 `AXIsProcessTrustedWithOptions`(辅助功能)与 IOKit `IOHIDCheckAccess`(输入监控) |
+| macOS 权限检测机制 | 方案 A:`pyobjc-framework-AVFoundation`(仅 darwin)查摄像头授权;`pyobjc-framework-ApplicationServices` 调 `AXIsProcessTrustedWithOptions`(辅助功能,含触发弹窗;纯 ctypes 构造 CFDictionary 过于脆弱);ctypes 调 IOKit `IOHIDCheckAccess`(输入监控) |
 | macOS 产物签名 | 仍为后续工作;README 注明 `xattr -cr` 解除隔离 |
 
 ## 3. 权限模型
@@ -31,7 +31,9 @@
 | ACCESSIBILITY | pynput 鼠标/键盘注入 | `AXIsProcessTrusted()`(ctypes) | `AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})`(触发系统弹窗) | `...?Privacy_Accessibility` |
 | INPUT_MONITORING | pynput GlobalHotKeys 全局快捷键监听 | IOKit `IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)`(ctypes) | `IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)` | `...?Privacy_ListenEvent` |
 
-依赖变更:`pyproject.toml` 增加 `pyobjc-framework-AVFoundation>=10.0; sys_platform == 'darwin'`。
+依赖变更:`pyproject.toml` 增加(均仅 darwin):
+`pyobjc-framework-AVFoundation>=10.0; sys_platform == 'darwin'` 与
+`pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'`。
 
 ### 3.1 permissions 模块接口(重写 `sigtouch/platformsupport/permissions.py`)
 
