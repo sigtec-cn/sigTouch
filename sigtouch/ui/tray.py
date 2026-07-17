@@ -1,0 +1,47 @@
+"""系统托盘:三态图标 + 菜单。"""
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+
+from sigtouch.ui.icons import COLOR_ACTIVE, COLOR_ERROR, COLOR_PAUSED, make_icon
+
+_STATE_META = {
+    "active": (COLOR_ACTIVE, "SigTouch:运行中", "暂停"),
+    "paused": (COLOR_PAUSED, "SigTouch:已暂停", "恢复"),
+    "error": (COLOR_ERROR, "SigTouch:摄像头异常", "暂停"),
+}
+
+
+class TrayController(QObject):
+    toggle_requested = Signal()
+    settings_requested = Signal()
+    preview_requested = Signal()
+    quit_requested = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._tray = QSystemTrayIcon(make_icon(COLOR_ACTIVE))
+        menu = QMenu()
+        self._toggle_action = QAction("暂停")
+        self._toggle_action.triggered.connect(self.toggle_requested)
+        menu.addAction(self._toggle_action)
+        settings = QAction("设置…", menu)
+        settings.triggered.connect(self.settings_requested)
+        menu.addAction(settings)
+        preview = QAction("调试预览", menu)
+        preview.triggered.connect(self.preview_requested)
+        menu.addAction(preview)
+        menu.addSeparator()
+        quit_ = QAction("退出", menu)
+        quit_.triggered.connect(self.quit_requested)
+        menu.addAction(quit_)
+        self._menu = menu  # 持引用防 GC
+        self._tray.setContextMenu(menu)
+        self._tray.setToolTip("SigTouch:运行中")
+        self._tray.show()
+
+    def set_state(self, state: str) -> None:
+        color, tip, toggle_text = _STATE_META[state]
+        self._tray.setIcon(make_icon(color))
+        self._tray.setToolTip(tip)
+        self._toggle_action.setText(toggle_text)
