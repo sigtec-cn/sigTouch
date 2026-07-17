@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 COLOR_ACTIVE = "#2ecc71"
 COLOR_PAUSED = "#95a5a6"
 COLOR_ERROR = "#e74c3c"
+COLOR_PERMISSION = "#f1c40f"
 
 
 def make_icon(color_hex: str) -> QIcon:

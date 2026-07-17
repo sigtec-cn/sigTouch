@@ -3,18 +3,20 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-from sigtouch.ui.icons import COLOR_ACTIVE, COLOR_ERROR, COLOR_PAUSED, make_icon
+from sigtouch.ui.icons import COLOR_ACTIVE, COLOR_ERROR, COLOR_PAUSED, COLOR_PERMISSION, make_icon
 
 _STATE_META = {
     "active": (COLOR_ACTIVE, "SigTouch:运行中", "暂停"),
     "paused": (COLOR_PAUSED, "SigTouch:已暂停", "恢复"),
     "error": (COLOR_ERROR, "SigTouch:摄像头异常", "暂停"),
+    "permission": (COLOR_PERMISSION, "SigTouch:等待权限授权", "暂停"),
 }
 
 
 class TrayController(QObject):
     toggle_requested = Signal()
     settings_requested = Signal()
+    permissions_requested = Signal()
     preview_requested = Signal()
     quit_requested = Signal()
 
@@ -28,6 +30,9 @@ class TrayController(QObject):
         settings = QAction("设置…", menu)
         settings.triggered.connect(self.settings_requested)
         menu.addAction(settings)
+        perms_action = QAction("权限设置…", menu)
+        perms_action.triggered.connect(self.permissions_requested)
+        menu.addAction(perms_action)
         preview = QAction("调试预览", menu)
         preview.triggered.connect(self.preview_requested)
         menu.addAction(preview)
