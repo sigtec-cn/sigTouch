@@ -20,7 +20,17 @@ import sigtouch.app as appmod
 from sigtouch.config import Config
 from sigtouch.interaction.gestures import EventKind
 from sigtouch.perception.types import FrameResult
+from sigtouch.platformsupport.permissions import PermissionKind
 from tests.hand_fixtures import open_hand, pinch_index
+
+
+def _grant_all(monkeypatch):
+    import sigtouch.app as app_module
+    monkeypatch.setattr(app_module.perms, "check", lambda k: True)
+    monkeypatch.setattr(app_module.perms, "snapshot",
+                        lambda: {k: True for k in PermissionKind})
+    monkeypatch.setattr(app_module.perms, "all_granted", lambda: True)
+    monkeypatch.setattr(app_module.perms, "request", lambda k: None)
 
 
 @pytest.fixture(scope="module")
@@ -57,6 +67,7 @@ def _stub_vision(self) -> None:
 
 @pytest.fixture
 def app_obj(qapp, monkeypatch):
+    _grant_all(monkeypatch)
     monkeypatch.setattr(appmod, "Injector", FakeInjector)
     monkeypatch.setattr(appmod.SigTouchApp, "_start_vision", _stub_vision)
     monkeypatch.setattr(appmod.SigTouchApp, "_setup_hotkey", lambda self: None)

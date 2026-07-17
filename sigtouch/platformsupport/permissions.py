@@ -124,8 +124,3 @@ def _input_monitoring_request_darwin() -> None:
     lib.IOHIDRequestAccess.restype = ctypes.c_bool
     lib.IOHIDRequestAccess.argtypes = [ctypes.c_int]
     lib.IOHIDRequestAccess(_HID_REQUEST_LISTEN)
-
-
-# Task 3 移除:app.py 迁移到 check() 前的兼容 shim
-def accessibility_ok() -> bool:
-    return check(PermissionKind.ACCESSIBILITY)

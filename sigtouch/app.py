@@ -14,7 +14,10 @@ from sigtouch.interaction.gestures import GestureStateMachine
 from sigtouch.interaction.mapper import CursorMapper
 from sigtouch.output.injector import Injector
 from sigtouch.perception.distance import overlay_scale
+from sigtouch.platformsupport import permissions as perms
+from sigtouch.platformsupport.permissions import PermissionKind
 from sigtouch.ui.overlay import OverlayWindow, target_screen_index
+from sigtouch.ui.permission_wizard import PermissionWizard
 from sigtouch.ui.preview import PreviewWindow
 from sigtouch.ui.settings_dialog import SettingsDialog
 from sigtouch.ui.tray import TrayController
@@ -63,7 +66,7 @@ class SigTouchApp(QObject):
         super().__init__()
         self._cfg = cfg
         self._paused = False
-        self._injector = Injector()
+        self._injector: Injector | None = None   # 辅助功能就绪后才构造
         self._overlay = OverlayWindow(cfg)
         self._overlay.apply_screen()
         self._preview = PreviewWindow()
@@ -74,21 +77,53 @@ class SigTouchApp(QObject):
         self._tray.settings_requested.connect(self._settings_dlg.show)
         self._tray.preview_requested.connect(self._show_preview)
         self._tray.quit_requested.connect(self._quit)
+        self._tray.permissions_requested.connect(self._show_wizard)
 
         self._hotkey_bridge = _HotkeyBridge()
         self._hotkey_bridge.pressed.connect(self._toggle_pause)
         self._hotkey_listener = None
-        self._setup_hotkey()
+
+        self._wizard = PermissionWizard()
+        self._wizard.all_granted.connect(self._on_permissions_changed)
+        self._perm_timer = QTimer(self)
+        self._perm_timer.timeout.connect(self._on_permissions_changed)
+
+        self._ensure_capabilities()
+        if not perms.all_granted():
+            # 降级启动:引导窗 + 轮询;摄像头权限先主动触发系统首弹
+            perms.request(PermissionKind.CAMERA)
+            self._show_wizard()
+            self._perm_timer.start(2000)
 
         self._build_interaction()
         self._vision: VisionThread | None = None
         self._start_vision()
         if show_preview:
             self._show_preview()
+        self._refresh_tray_state()
 
         self._watchdog = QTimer(self)
         self._watchdog.timeout.connect(self._check_watchdog)
         self._watchdog.start(1000)
+
+    # ---- 权限降级/激活 ----
+    def _ensure_capabilities(self) -> None:
+        """按当前权限构造缺失能力;可重入,权限就绪即激活,无需重启。"""
+        if self._injector is None and perms.check(PermissionKind.ACCESSIBILITY):
+            self._injector = Injector()
+        if self._hotkey_listener is None and \
+                perms.check(PermissionKind.INPUT_MONITORING):
+            self._setup_hotkey()
+
+    def _on_permissions_changed(self) -> None:
+        self._ensure_capabilities()
+        if perms.all_granted():
+            self._perm_timer.stop()
+        self._refresh_tray_state()
+
+    def _show_wizard(self) -> None:
+        self._wizard.show()
+        self._wizard.raise_()
 
     # ---- 构建/重建 ----
     def _build_interaction(self) -> None:
@@ -134,6 +169,8 @@ class SigTouchApp(QObject):
         if self._hotkey_listener is not None:
             self._hotkey_listener.stop()
             self._hotkey_listener = None
+        if not perms.check(PermissionKind.INPUT_MONITORING):
+            return  # 输入监控未授权:跳过,权限就绪后由 _ensure_capabilities 再启动
         combo = self._cfg.get("general/pause_hotkey").strip()
         if not combo:
             return
@@ -152,8 +189,10 @@ class SigTouchApp(QObject):
         suspended = self._gate.update(result.face_present, result.timestamp_ms)
         if self._paused or suspended:
             for ev in self._machine.update(None, result.timestamp_ms):
-                self._injector.dispatch(ev)   # 挂起瞬间释放拖拽(DRAG_END)
-            self._injector.release_all()
+                if self._injector is not None:
+                    self._injector.dispatch(ev)
+            if self._injector is not None:
+                self._injector.release_all()
             self._overlay.clear()
             self._vision.set_idle(True)
             return
@@ -164,8 +203,9 @@ class SigTouchApp(QObject):
             x, y = self._mapper.update(F.anchor_point(result.hand),
                                        self._machine.pinching,
                                        result.timestamp_ms)
-            self._injector.move(x + self._screen_origin[0],
-                                y + self._screen_origin[1])
+            if self._injector is not None:
+                self._injector.move(x + self._screen_origin[0],
+                                    y + self._screen_origin[1])
             dist = result.face_distance_m if result.face_distance_m else 0.6
             scale = overlay_scale(dist,
                                   self._cfg.get("display/screen_diag_inch"))
@@ -173,19 +213,26 @@ class SigTouchApp(QObject):
         else:
             self._overlay.clear()
         for ev in events:
-            self._injector.dispatch(ev)
+            if self._injector is not None:
+                self._injector.dispatch(ev)
 
     # ---- 托盘/设置响应 ----
     def _toggle_pause(self) -> None:
         self._paused = not self._paused
         if self._paused:
-            self._injector.release_all()
+            if self._injector is not None:
+                self._injector.release_all()
             self._overlay.clear()
             self._vision.set_idle(True)
         self._refresh_tray_state()
 
     def _refresh_tray_state(self) -> None:
-        self._tray.set_state("paused" if self._paused else "active")
+        if self._paused:
+            self._tray.set_state("paused")
+        elif not perms.all_granted():
+            self._tray.set_state("permission")
+        else:
+            self._tray.set_state("active")
 
     def _show_preview(self) -> None:
         self._preview.show()
@@ -194,7 +241,8 @@ class SigTouchApp(QObject):
     def _on_settings_applied(self) -> None:
         # 先释放:_build_interaction() 会丢弃旧 GestureStateMachine,若正处于
         # DRAGGING 状态 DRAG_END 将永远不会发出,导致鼠标左键卡在按下状态。
-        self._injector.release_all()
+        if self._injector is not None:
+            self._injector.release_all()
         from sigtouch.platformsupport.autostart import set_autostart
         try:
             set_autostart(self._cfg.get("general/autostart"))
@@ -223,7 +271,8 @@ class SigTouchApp(QObject):
             self._hotkey_listener.stop()
         if self._vision is not None:
             self._vision.stop()
-        self._injector.release_all()
+        if self._injector is not None:
+            self._injector.release_all()
         QApplication.instance().quit()
 
 
@@ -243,13 +292,6 @@ def main() -> None:
             + "\n\n请先运行: python scripts/download_models.py")
         sys.exit(1)
 
-    from sigtouch.platformsupport.permissions import accessibility_ok
-    if not accessibility_ok():
-        QMessageBox.warning(
-            None, "需要辅助功能权限",
-            "SigTouch 需要辅助功能权限才能控制鼠标和键盘。\n\n"
-            "请打开 系统设置 → 隐私与安全性 → 辅助功能,"
-            "勾选 SigTouch(或运行它的终端/Python),然后重新启动本应用。")
     cfg = Config(QSettingsBackend())
     controller = SigTouchApp(cfg, show_preview="--preview" in sys.argv[1:])
     _ = controller  # 持引用
