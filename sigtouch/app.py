@@ -225,6 +225,16 @@ def main() -> None:
     app.setApplicationName("SigTouch")
     from PySide6.QtWidgets import QMessageBox
 
+    from sigtouch.perception.pipeline import MODELS_DIR
+    missing = [n for n in ("hand_landmarker.task", "face_landmarker.task")
+               if not (MODELS_DIR / n).exists()]
+    if missing:
+        QMessageBox.critical(
+            None, "缺少模型文件",
+            "缺少 MediaPipe 模型: " + ", ".join(missing)
+            + "\n\n请先运行: python scripts/download_models.py")
+        sys.exit(1)
+
     from sigtouch.platformsupport.permissions import accessibility_ok
     if not accessibility_ok():
         QMessageBox.warning(
