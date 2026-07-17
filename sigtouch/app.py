@@ -124,6 +124,7 @@ class SigTouchApp(QObject):
     def _show_wizard(self) -> None:
         self._wizard.show()
         self._wizard.raise_()
+        self._wizard.activateWindow()
 
     # ---- 构建/重建 ----
     def _build_interaction(self) -> None:

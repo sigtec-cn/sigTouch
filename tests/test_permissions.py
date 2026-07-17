@@ -1,5 +1,3 @@
-import pytest
-
 from sigtouch.platformsupport import permissions as P
 from sigtouch.platformsupport.permissions import PermissionKind
 
