@@ -188,6 +188,11 @@ class SigTouchApp(QObject):
         self._vision.set_preview(True)
 
     def _on_settings_applied(self) -> None:
+        from sigtouch.platformsupport.autostart import set_autostart
+        try:
+            set_autostart(self._cfg.get("general/autostart"))
+        except OSError:
+            pass  # 无权限等场景不阻塞设置应用
         self._build_interaction()
         self._overlay.apply_screen()
         self._setup_hotkey()
@@ -218,6 +223,15 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("SigTouch")
+    from PySide6.QtWidgets import QMessageBox
+
+    from sigtouch.platformsupport.permissions import accessibility_ok
+    if not accessibility_ok():
+        QMessageBox.warning(
+            None, "需要辅助功能权限",
+            "SigTouch 需要辅助功能权限才能控制鼠标和键盘。\n\n"
+            "请打开 系统设置 → 隐私与安全性 → 辅助功能,"
+            "勾选 SigTouch(或运行它的终端/Python),然后重新启动本应用。")
     cfg = Config(QSettingsBackend())
     controller = SigTouchApp(cfg, show_preview="--preview" in sys.argv[1:])
     _ = controller  # 持引用
