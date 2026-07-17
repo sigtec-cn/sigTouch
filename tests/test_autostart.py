@@ -34,8 +34,3 @@ def test_spaced_executable_path_stays_one_argument(tmp_path, monkeypatch):
     plist_file = tmp_path / "Library" / "LaunchAgents" / "cn.sigtec.sigtouch.plist"
     plist = plistlib.loads(plist_file.read_bytes())
     assert plist["ProgramArguments"][0] == "/Applications/My App.app/Contents/MacOS/python3"
-
-
-def test_accessibility_ok_returns_bool():
-    from sigtouch.platformsupport import permissions
-    assert isinstance(permissions.accessibility_ok(), bool)

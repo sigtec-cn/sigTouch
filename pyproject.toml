@@ -9,6 +9,8 @@ dependencies = [
     "mediapipe>=0.10.14",
     "opencv-python>=4.9",
     "pynput>=1.7.6",
+    "pyobjc-framework-AVFoundation>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]
