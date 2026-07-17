@@ -1,4 +1,5 @@
 """开机自启:Windows 注册表 Run / macOS LaunchAgent / Linux autostart .desktop。"""
+import shlex
 import sys
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def set_autostart(enabled: bool, home: Path | None = None) -> None:
         path = _plist_path(home)
         if enabled:
             path.parent.mkdir(parents=True, exist_ok=True)
-            args = _launch_command().replace('"', "").split()
+            args = shlex.split(_launch_command())
             items = "\n".join(f"    <string>{a}</string>" for a in args)
             path.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
