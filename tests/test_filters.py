@@ -1,4 +1,3 @@
-import math
 import pytest
 from sigtouch.interaction.filters import OneEuroFilter
 
