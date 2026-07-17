@@ -10,7 +10,8 @@
 
 ## 平台产物(在各自平台机器上执行)
 - **Windows**:上述命令得到 `SigTouch.exe`;安装器用 Inno Setup 包装 `dist/SigTouch/`(后续脚本)。
-- **macOS**:产出 `dist/SigTouch.app`;分发前需 `codesign` + 公证(后续处理);
+- **macOS**:产物为 `dist/SigTouch/`(onedir 目录,内含 `SigTouch` 可执行文件),直接运行即可;
+  打包成 `.app` bundle(PyInstaller BUNDLE 步骤)与 `codesign` + 公证属于后续工作;
   首次运行需在系统设置授权摄像头与辅助功能。
 - **Linux**:`dist/SigTouch/` 可直接运行;AppImage 用 appimagetool 包装(后续脚本)。
 
