@@ -114,8 +114,17 @@ class SigTouchApp(QObject):
         self._vision.start()
 
     def _restart_vision(self) -> None:
-        if self._vision is not None:
-            self._vision.stop()
+        old = self._vision
+        if old is not None:
+            # 先断开信号:即使旧线程卡在 cap.read() 未能退出,
+            # 也不会再驱动 _on_result(孤儿线程 _running=False,读取返回后自行结束)
+            for sig in (old.result_ready, old.preview_frame,
+                        old.camera_error, old.recovered):
+                try:
+                    sig.disconnect()
+                except RuntimeError:
+                    pass  # 无连接可断
+            old.stop()
         self._start_vision()
 
     def _setup_hotkey(self) -> None:
