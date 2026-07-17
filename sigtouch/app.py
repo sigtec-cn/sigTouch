@@ -14,7 +14,7 @@ from sigtouch.interaction.gestures import GestureStateMachine
 from sigtouch.interaction.mapper import CursorMapper
 from sigtouch.output.injector import Injector
 from sigtouch.perception.distance import overlay_scale
-from sigtouch.ui.overlay import OverlayWindow
+from sigtouch.ui.overlay import OverlayWindow, target_screen_index
 from sigtouch.ui.preview import PreviewWindow
 from sigtouch.ui.settings_dialog import SettingsDialog
 from sigtouch.ui.tray import TrayController
@@ -93,7 +93,7 @@ class SigTouchApp(QObject):
     # ---- 构建/重建 ----
     def _build_interaction(self) -> None:
         screens = QGuiApplication.screens()
-        idx = min(self._cfg.get("display/monitor"), len(screens) - 1)
+        idx = target_screen_index(self._cfg, screens)
         geo = screens[idx].geometry()
         self._machine = GestureStateMachine(self._cfg)
         self._mapper = CursorMapper(

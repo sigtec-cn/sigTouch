@@ -14,6 +14,12 @@ _FINGER_CHAINS = [
 _PALM_LOOP = [0, 5, 9, 13, 17]
 
 
+def target_screen_index(cfg: Config, screens) -> int:
+    """把配置的目标显示器索引夹到 [0, len(screens)-1],避免显示器被拔掉后越界。"""
+    idx = cfg.get("display/monitor")
+    return max(0, min(idx, len(screens) - 1))
+
+
 def scaled_points(landmarks, w: int, h: int, scale: float):
     """归一化关键点→像素坐标,围绕质心放大 scale 倍(远距离时手画得更大)。"""
     px = [(x * w, y * h) for x, y, _ in landmarks]
@@ -39,7 +45,7 @@ class OverlayWindow(QWidget):
 
     def apply_screen(self) -> None:
         screens = QGuiApplication.screens()
-        idx = min(self._cfg.get("display/monitor"), len(screens) - 1)
+        idx = target_screen_index(self._cfg, screens)
         self.setGeometry(screens[idx].geometry())
         self.show()
 
