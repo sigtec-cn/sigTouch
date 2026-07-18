@@ -22,7 +22,7 @@ DEFAULTS: dict[str, Any] = {
     "interaction/suspend_after_s": 3.0,   # 无人脸自动挂起时长
     "display/screen_diag_inch": 24.0,
     "display/overlay_opacity": 0.35,
-    "display/overlay_color": "#FFFFFF",
+    "display/overlay_color": "#000000",  # 深色影子默认
     "display/monitor": 0,
     "gestures/left_click": True,
     "gestures/right_click": True,

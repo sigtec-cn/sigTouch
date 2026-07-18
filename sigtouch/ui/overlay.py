@@ -1,11 +1,16 @@
 """全屏透明点击穿透覆盖层:Oculus 风格半透明手部轮廓 + 手势反馈图标。"""
+import math
+
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPen, QPolygonF
+from PySide6.QtGui import (QColor, QFont, QGuiApplication, QPainter,
+                           QPainterPath, QPainterPathStroker, QPolygonF)
 from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import QWidget
 
 from sigtouch.config import Config
+from sigtouch.interaction.features import INDEX_TIP
 from sigtouch.perception.types import HandFrame
+from sigtouch.ui.native import pin_window_topmost
 
 _FINGER_CHAINS = [
     [0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [5, 9, 10, 11, 12],
@@ -28,6 +33,34 @@ def scaled_points(landmarks, w: int, h: int, scale: float):
     return [((x - cx) * scale + cx, (y - cy) * scale + cy) for x, y in px]
 
 
+def align_to_cursor(points, index_tip_idx, cursor_px):
+    """整体平移点集,使 points[index_tip_idx] 与 cursor_px 重合(光标钉在食指尖)。"""
+    dx = cursor_px[0] - points[index_tip_idx][0]
+    dy = cursor_px[1] - points[index_tip_idx][1]
+    return [(x + dx, y + dy) for x, y in points]
+
+
+def silhouette_path(points, palm_size_px):
+    """把 21 个像素点合成实心手形(影子剪影):五指链粗圆描边 ∪ 掌心多边形。"""
+    stroker = QPainterPathStroker()
+    stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+    stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    finger_w = max(4.0, palm_size_px * 0.28)
+    palm_w = max(8.0, palm_size_px * 0.55)
+    path = QPainterPath()
+    for chain in _FINGER_CHAINS:
+        line = QPainterPath()
+        line.moveTo(QPointF(*points[chain[0]]))
+        for idx in chain[1:]:
+            line.lineTo(QPointF(*points[idx]))
+        stroker.setWidth(palm_w if chain == [0, 17] else finger_w)
+        path = path.united(stroker.createStroke(line))
+    palm = QPainterPath()
+    palm.addPolygon(QPolygonF([QPointF(*points[i]) for i in _PALM_LOOP]))
+    palm.closeSubpath()
+    return path.united(palm)
+
+
 class OverlayWindow(QWidget):
     def __init__(self, cfg: Config):
         super().__init__(None, Qt.WindowType.FramelessWindowHint
@@ -42,17 +75,20 @@ class OverlayWindow(QWidget):
         self._scale = 1.0
         self._feedback: str | None = None
         self._feedback_frames = 0
+        self._cursor_px = None
 
     def apply_screen(self) -> None:
         screens = QGuiApplication.screens()
         idx = target_screen_index(self._cfg, screens)
         self.setGeometry(screens[idx].geometry())
         self.show()
+        pin_window_topmost(self)
 
     def update_hand(self, hand: HandFrame, scale: float,
-                    feedback: str | None) -> None:
+                    feedback: str | None, cursor_px=None) -> None:
         self._hand = hand
         self._scale = scale
+        self._cursor_px = cursor_px
         if feedback:                     # 反馈图标保持约 0.5s(15 帧)
             self._feedback = feedback
             self._feedback_frames = 15
@@ -66,6 +102,7 @@ class OverlayWindow(QWidget):
         self._hand = None
         self._feedback = None
         self._feedback_frames = 0
+        self._cursor_px = None
         self.update()
 
     def paintEvent(self, event) -> None:
@@ -73,35 +110,21 @@ class OverlayWindow(QWidget):
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor(self._cfg.get("display/overlay_color"))
-        opacity = self._cfg.get("display/overlay_opacity")
         pts = scaled_points(self._hand.landmarks, self.width(), self.height(),
                             self._scale)
-        base_w = max(6.0, self.height() / 90.0) * self._scale
-
-        # 外圈微光 + 主描边(两遍绘制)
-        for width, alpha in ((base_w * 2.2, opacity * 0.25), (base_w, opacity)):
-            pen = QPen(color)
-            pen.setWidthF(width)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            color.setAlphaF(min(1.0, alpha))
-            pen.setColor(color)
-            p.setPen(pen)
-            for chain in _FINGER_CHAINS:
-                for a, b in zip(chain, chain[1:]):
-                    p.drawLine(QPointF(*pts[a]), QPointF(*pts[b]))
-
-        # 掌心半透明填充
-        fill = QColor(color)
-        fill.setAlphaF(opacity * 0.5)
+        if self._cursor_px is not None:
+            pts = align_to_cursor(pts, INDEX_TIP, self._cursor_px)
+        palm_px = math.dist(pts[0], pts[9])
+        color = QColor(self._cfg.get("display/overlay_color"))
+        color.setAlphaF(min(1.0, self._cfg.get("display/overlay_opacity")))
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(fill)
-        p.drawPolygon(QPolygonF([QPointF(*pts[i]) for i in _PALM_LOOP]))
+        p.fillPath(silhouette_path(pts, palm_px), color)
 
         if self._feedback:
             wrist = pts[0]
-            p.setPen(QColor(color.red(), color.green(), color.blue(), 230))
             p.setFont(QFont("", int(28 * self._scale)))
+            p.setPen(QColor(0, 0, 0, 230))
+            p.drawText(QPointF(wrist[0] + 41, wrist[1] - 39), self._feedback)
+            p.setPen(QColor(255, 255, 255, 240))
             p.drawText(QPointF(wrist[0] + 40, wrist[1] - 40), self._feedback)
         p.end()
