@@ -49,3 +49,17 @@ def test_active_hand_and_color_roundtrip(qapp):
     assert cfg.get("interaction/active_hand") == "Left"
     assert cfg.get("display/overlay_color") == "#112233"
     assert color_widget.text() == "#112233"
+
+
+def test_color_button_click_path_updates_field(qapp, monkeypatch):
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QColorDialog
+
+    from sigtouch.ui.settings_dialog import SettingsDialog
+    cfg = Config(backend={})
+    dlg = SettingsDialog(cfg)
+    monkeypatch.setattr(QColorDialog, "getColor",
+                        staticmethod(lambda *a, **k: QColor("#abcdef")))
+    dlg.field_widget("display/overlay_color").click()
+    dlg.apply()
+    assert cfg.get("display/overlay_color").lower() == "#abcdef"
