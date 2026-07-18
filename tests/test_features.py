@@ -52,3 +52,14 @@ def test_anchor_point_is_index_fingertip():
     ax, ay = F.anchor_point(open_hand())
     assert ax == pytest.approx(0.47)   # 基准张开手食指尖 x
     assert ay == pytest.approx(0.40)   # 基准张开手食指尖 y
+
+
+def test_palm_facing_camera_left_hand_convention():
+    # 镜像画面下的左手:x 翻转的基准手,掌心朝摄像头 → True
+    h = open_hand()
+    mirrored = type(h)(landmarks=[(1.0 - x, y, z) for x, y, z in h.landmarks],
+                       handedness="Left")
+    assert F.palm_facing_camera(mirrored) is True
+    # 未翻转但标为左手(即左手手背朝摄像头)→ False
+    back = type(h)(landmarks=list(h.landmarks), handedness="Left")
+    assert F.palm_facing_camera(back) is False
