@@ -20,9 +20,10 @@
 从 [Releases](../../releases) 下载对应平台压缩包,解压后运行 `SigTouch`:
 
 - **Windows**:解压 `SigTouch-*-win64.zip`,运行 `SigTouch\SigTouch.exe`。
-- **macOS**:解压 `SigTouch-*-macos-arm64.zip`;产物未签名,首次运行前需解除隔离:
-  `xattr -cr SigTouch`,然后运行 `SigTouch/SigTouch`。启动后按权限引导窗逐项授权
-  摄像头、辅助功能、输入监控(授权后自动激活,无需重启)。
+- **macOS**:解压 `SigTouch-*-macos-arm64.zip` 得到 `SigTouch.app`;产物未签名,
+  首次运行前解除隔离:`xattr -cr SigTouch.app`,然后双击(或 `open SigTouch.app`)启动。
+  启动后按权限引导窗逐项授权摄像头、辅助功能、输入监控(授权后自动激活,无需重启);
+  系统权限面板中显示的应用名即为 SigTouch。
 - **Linux (X11)**:解压 `SigTouch-*-linux-x64.tar.gz`,运行 `SigTouch/SigTouch`。
   Wayland 下输入注入受限(已知限制)。
 

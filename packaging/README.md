@@ -10,9 +10,9 @@
 
 ## 平台产物(在各自平台机器上执行)
 - **Windows**:上述命令得到 `SigTouch.exe`;安装器用 Inno Setup 包装 `dist/SigTouch/`(后续脚本)。
-- **macOS**:产物为 `dist/SigTouch/`(onedir 目录,内含 `SigTouch` 可执行文件),直接运行即可;
-  打包成 `.app` bundle(PyInstaller BUNDLE 步骤)与 `codesign` + 公证属于后续工作;
-  首次运行需在系统设置授权摄像头与辅助功能。
+- **macOS**:产出 `dist/SigTouch.app`(BUNDLE,含 NSCameraUsageDescription 等
+  Info.plist 权限描述;同目录 `dist/SigTouch/` onedir 为中间产物);分发压缩
+  `SigTouch.app`;`codesign` + 公证仍为后续工作,用户侧用 `xattr -cr` 解除隔离。
 - **Linux**:`dist/SigTouch/` 可直接运行;AppImage 用 appimagetool 包装(后续脚本)。
 
 ## 已知限制

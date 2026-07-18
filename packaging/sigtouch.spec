@@ -21,3 +21,15 @@ exe = EXE(
     console=False,
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="SigTouch")
+
+app = BUNDLE(
+    coll,
+    name="SigTouch.app",
+    bundle_identifier="cn.sigtec.sigtouch",
+    info_plist={
+        "NSCameraUsageDescription":
+            "SigTouch 需要摄像头识别手势以控制鼠标和键盘。",
+        "NSHighResolutionCapable": True,
+        "LSMinimumSystemVersion": "12.0",
+    },
+)

@@ -21,5 +21,10 @@
     本项须针对打包产物(Release 压缩包解压后的 SigTouch)执行,而非开发
     venv——打包遗漏 pyobjc 框架时权限检测会静默 fail-open,只有打包产物能暴露。
 
+12. (v1.2)打包 .app 走查:`xattr -cr` 后双击 `SigTouch.app` 正常启动(权限面板显示
+    SigTouch);全屏播放视频时手部影子仍显示在最上层;影子为深色实心剪影(非骨架),
+    光标始终钉在影子食指尖上,捏合冻结期影子随光标停住;设置切换"控制手"为左手后,
+    仅左手可控、右手被忽略(调试预览 hand= 标签核对),切回右手同理。
+
 来源:`.superpowers/sdd/task-13-report.md`「Deferred manual QA」一节(迁移至此以便脱离
 scratch 目录长期保留)。
