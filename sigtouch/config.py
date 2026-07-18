@@ -14,6 +14,7 @@ DEFAULTS: dict[str, Any] = {
     "interaction/cooldown_ms": 400,  # 离散手势冷却
     "interaction/freeze_ms": 150,    # 捏合瞬间光标冻结时长
     "interaction/scroll_gain": 40.0, # 归一化位移→滚轮行数增益
+    "interaction/active_hand": "Right",  # 控制手:"Right" | "Left"
     "interaction/push_area_ratio": 1.35,  # 推手:包围盒面积放大倍数
     "interaction/push_window_ms": 300,    # 推手:面积增长观察窗口
     "interaction/smooth_min_cutoff": 1.0, # One Euro 参数

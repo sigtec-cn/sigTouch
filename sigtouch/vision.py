@@ -53,8 +53,10 @@ class VisionThread(QThread):
 
     def run(self) -> None:
         try:
-            pipeline = PerceptionPipeline(self._cfg.get("camera/width"),
-                                          self._cfg.get("camera/fov_deg"))
+            pipeline = PerceptionPipeline(
+                self._cfg.get("camera/width"),
+                self._cfg.get("camera/fov_deg"),
+                active_hand=self._cfg.get("interaction/active_hand"))
         except Exception as exc:  # 模型缺失/损坏:进入错误待机而非死亡,避免看门狗每秒重启
             self.camera_error.emit(f"感知模型加载失败: {exc}")
             while self._running:

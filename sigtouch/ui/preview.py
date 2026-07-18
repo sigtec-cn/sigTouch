@@ -40,6 +40,8 @@ class PreviewWindow(QWidget):
             cv2.circle(bgr, (int(ax * w), int(ay * h)), 8, (0, 0, 255), -1)
             cv2.putText(bgr, f"pinch={F.pinch_ratio(r.hand, F.INDEX_TIP):.2f}",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            cv2.putText(bgr, f"hand={r.hand.handedness}", (10, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         if r is not None and r.face_distance_m is not None:
             cv2.putText(bgr, f"dist={r.face_distance_m:.2f}m", (10, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)

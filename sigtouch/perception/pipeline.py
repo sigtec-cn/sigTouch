@@ -20,13 +20,22 @@ _RIGHT_IRIS_CENTER = 468
 _LEFT_IRIS_CENTER = 473
 
 
+def select_hand(hands, wanted):
+    """从 [(handedness_label, landmarks), ...] 中取第一只 label==wanted 的手;无匹配返回 None。"""
+    for label, lms in hands:
+        if label == wanted:
+            return lms
+    return None
+
+
 class PerceptionPipeline:
     def __init__(self, frame_width: int, fov_deg: float,
-                 models_dir: Path | None = None):
+                 models_dir: Path | None = None, active_hand: str = "Right"):
         d = models_dir or MODELS_DIR
+        self._active_hand = active_hand
         self._hands = HandLandmarker.create_from_options(HandLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=str(d / "hand_landmarker.task")),
-            running_mode=RunningMode.VIDEO, num_hands=1))
+            running_mode=RunningMode.VIDEO, num_hands=2))
         self._face = FaceLandmarker.create_from_options(FaceLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=str(d / "face_landmarker.task")),
             running_mode=RunningMode.VIDEO, num_faces=1))
@@ -42,9 +51,15 @@ class PerceptionPipeline:
         hand = None
         hres = self._hands.detect_for_video(image, t_ms)
         if hres.hand_landmarks:
-            lms = [(p.x, p.y, p.z) for p in hres.hand_landmarks[0]]
-            handedness = hres.handedness[0][0].category_name
-            hand = HandFrame(landmarks=lms, handedness=handedness)
+            candidates = [
+                (hres.handedness[i][0].category_name,
+                 [(p.x, p.y, p.z) for p in lms])
+                for i, lms in enumerate(hres.hand_landmarks)
+            ]
+            picked = select_hand(candidates, self._active_hand)
+            if picked is not None:
+                hand = HandFrame(landmarks=picked,
+                                 handedness=self._active_hand)
 
         raw_d = None
         fres = self._face.detect_for_video(image, t_ms)
