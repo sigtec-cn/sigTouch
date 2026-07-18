@@ -210,7 +210,8 @@ class SigTouchApp(QObject):
             dist = result.face_distance_m if result.face_distance_m else 0.6
             scale = overlay_scale(dist,
                                   self._cfg.get("display/screen_diag_inch"))
-            self._overlay.update_hand(result.hand, scale, self._machine.feedback)
+            self._overlay.update_hand(result.hand, scale,
+                                      self._machine.feedback, cursor_px=(x, y))
         else:
             self._overlay.clear()
         for ev in events:
@@ -261,6 +262,8 @@ class SigTouchApp(QObject):
             return
         # 预览窗被用户关掉后停发预览帧,省 CPU
         self._vision.set_preview(self._preview.isVisible())
+        if self._overlay.isVisible():
+            self._overlay.raise_()  # 兜底:防止被后开窗口压住(macOS 另有原生层级)
         now = int(time.monotonic() * 1000)
         last = self._vision.last_frame_monotonic_ms
         if last and now - last > 5000:  # 5 秒无帧:管线卡死,重建

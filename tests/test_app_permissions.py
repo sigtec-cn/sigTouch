@@ -153,3 +153,34 @@ def test_full_permissions_start_is_unchanged(qapp, monkeypatch):
     a = _make_app(monkeypatch)
     assert isinstance(a._injector, FakeInjector)   # 直接完整启动
     assert a._perm_timer.isActive() is False       # 无需轮询
+
+
+def test_overlay_receives_mapper_cursor(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            self.moves = []
+
+        def move(self, x, y):
+            self.moves.append((x, y))
+
+        def dispatch(self, ev):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        a._overlay, "update_hand",
+        lambda hand, scale, feedback, cursor_px=None: calls.append(cursor_px))
+    a._on_result(FrameResult(timestamp_ms=0, hand=open_hand(),
+                             face_distance_m=0.6, face_present=True))
+    assert calls and calls[0] is not None
+    ox, oy = a._screen_origin
+    assert a._injector.moves[0] == (calls[0][0] + ox, calls[0][1] + oy)
