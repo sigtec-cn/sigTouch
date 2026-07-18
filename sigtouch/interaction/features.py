@@ -62,7 +62,6 @@ def bbox_area(hand: HandFrame) -> float:
 
 
 def anchor_point(hand: HandFrame) -> tuple[float, float]:
-    """光标锚点:拇指尖与食指尖的中点(捏合动作中位移最小)。"""
-    t = hand.landmarks[THUMB_TIP]
-    i = hand.landmarks[INDEX_TIP]
-    return ((t[0] + i[0]) / 2.0, (t[1] + i[1]) / 2.0)
+    """光标锚点:食指指尖——光标始终钉在影子的食指上。"""
+    x, y, _ = hand.landmarks[INDEX_TIP]
+    return (x, y)

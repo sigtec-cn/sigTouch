@@ -48,7 +48,7 @@ def test_bbox_area_grows_with_scale():
     assert F.bbox_area(open_hand(scale=1.3)) > F.bbox_area(open_hand()) * 1.5
 
 
-def test_anchor_point_between_thumb_and_index():
+def test_anchor_point_is_index_fingertip():
     ax, ay = F.anchor_point(open_hand())
-    assert ax == pytest.approx((0.40 + 0.47) / 2)
-    assert ay == pytest.approx((0.49 + 0.40) / 2)
+    assert ax == pytest.approx(0.47)   # 基准张开手食指尖 x
+    assert ay == pytest.approx(0.40)   # 基准张开手食指尖 y
