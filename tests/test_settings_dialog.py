@@ -32,3 +32,20 @@ def test_dialog_loads_defaults_and_applies_changes(qapp):
     assert cfg.get("display/screen_diag_inch") == pytest.approx(55.0)
     assert cfg.get("gestures/enter") is False
     assert applied == [True]
+
+
+def test_active_hand_and_color_roundtrip(qapp):
+    from sigtouch.ui.settings_dialog import SettingsDialog
+    cfg = Config(backend={})
+    dlg = SettingsDialog(cfg)
+    # 默认加载
+    hand_widget = dlg.field_widget("interaction/active_hand")
+    assert hand_widget.currentData() == "Right"
+    color_widget = dlg.field_widget("display/overlay_color")
+    # 修改并应用(setter 经注册表,与 _load 同路)
+    dlg._fields["interaction/active_hand"][2]("Left")
+    dlg._fields["display/overlay_color"][2]("#112233")
+    dlg.apply()
+    assert cfg.get("interaction/active_hand") == "Left"
+    assert cfg.get("display/overlay_color") == "#112233"
+    assert color_widget.text() == "#112233"

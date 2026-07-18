@@ -1,9 +1,9 @@
 """设置窗口:四个标签页,控件统一注册到 self._fields,加载/应用走同一条路。"""
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QColor, QGuiApplication
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-                               QDoubleSpinBox, QFormLayout, QLineEdit, QSpinBox,
-                               QTabWidget, QVBoxLayout, QWidget)
+                               QDoubleSpinBox, QFormLayout, QLineEdit, QPushButton,
+                               QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
 from sigtouch.config import Config
 
@@ -66,6 +66,43 @@ class SettingsDialog(QDialog):
         self._fields[key] = (w, w.currentIndex, w.setCurrentIndex)
         return w
 
+    def _hand_combo(self, key):
+        w = QComboBox()
+        w.addItem("右手", "Right")
+        w.addItem("左手", "Left")
+
+        def getter():
+            return w.currentData()
+
+        def setter(value):
+            idx = w.findData(value)
+            w.setCurrentIndex(idx if idx >= 0 else 0)
+
+        self._fields[key] = (w, getter, setter)
+        return w
+
+    def _color_button(self, key):
+        w = QPushButton()
+
+        def getter():
+            return w.property("color_hex") or "#000000"
+
+        def setter(value):
+            value = str(value)
+            w.setProperty("color_hex", value)
+            w.setText(value)
+            w.setStyleSheet(f"background-color: {value};")
+
+        def pick(_=False):
+            from PySide6.QtWidgets import QColorDialog
+            c = QColorDialog.getColor(QColor(getter()), self, "选择影子颜色")
+            if c.isValid():
+                setter(c.name())
+
+        w.clicked.connect(pick)
+        self._fields[key] = (w, getter, setter)
+        return w
+
     # ---- 标签页 ----
     def _camera_tab(self):
         page, form = QWidget(), QFormLayout()
@@ -78,6 +115,7 @@ class SettingsDialog(QDialog):
 
     def _interaction_tab(self):
         page, form = QWidget(), QFormLayout()
+        form.addRow("控制手", self._hand_combo("interaction/active_hand"))
         form.addRow("交互框留白比例", self._dspin("interaction/box_margin", 0.05, 0.30, 0.01))
         form.addRow("平滑截止频率", self._dspin("interaction/smooth_min_cutoff", 0.1, 5.0, 0.1, 1))
         form.addRow("点击最长保持(ms)", self._spin("interaction/click_max_ms", 100, 600))
@@ -95,6 +133,7 @@ class SettingsDialog(QDialog):
         page, form = QWidget(), QFormLayout()
         form.addRow("屏幕对角线(英寸)", self._dspin("display/screen_diag_inch", 10.0, 300.0, 1.0, 1))
         form.addRow("轮廓不透明度", self._dspin("display/overlay_opacity", 0.1, 1.0, 0.05))
+        form.addRow("影子颜色", self._color_button("display/overlay_color"))
         form.addRow("目标显示器", self._monitor_combo("display/monitor"))
         page.setLayout(form)
         return page
