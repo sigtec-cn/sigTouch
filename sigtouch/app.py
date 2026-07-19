@@ -210,8 +210,10 @@ class SigTouchApp(QObject):
                 self._injector.move(x + self._screen_origin[0],
                                     y + self._screen_origin[1])
             dist = result.face_distance_m if result.face_distance_m else 0.6
-            scale = overlay_scale(dist,
-                                  self._cfg.get("display/screen_diag_inch"))
+            scale = overlay_scale(
+                dist, self._cfg.get("display/screen_diag_inch"),
+                self._cfg.get("display/camera_screen_offset_m"),
+                self._cfg.get("display/hand_scale_multiplier"))
             self._overlay.update_hand(result.hand, scale,
                                       self._machine.feedback, cursor_px=(x, y))
         else:

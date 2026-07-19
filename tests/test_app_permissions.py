@@ -208,3 +208,37 @@ def test_light_settings_do_not_restart_vision(qapp, monkeypatch):
     assert restarts == []            # 轻量路径不重启视觉线程
     a._on_vision_restart_needed()
     assert restarts == [1]           # 重启路径走 _restart_vision
+
+
+def test_overlay_scale_consumes_offset_and_multiplier(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def move(self, x, y):
+            pass
+
+        def dispatch(self, ev):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    monkeypatch.setattr(
+        SigTouchApp, "_start_vision",
+        lambda self: setattr(self, "_vision", _VisionStub()))
+    from sigtouch.config import Config as _Config
+    cfg = _Config(backend={"display/hand_scale_multiplier": 2.0})
+    a = SigTouchApp(cfg)
+    scales = []
+    monkeypatch.setattr(
+        a._overlay, "update_hand",
+        lambda hand, scale, feedback, cursor_px=None: scales.append(scale))
+    a._on_result(FrameResult(timestamp_ms=0, hand=open_hand(),
+                             face_distance_m=0.6, face_present=True))
+    assert scales and scales[0] == pytest.approx(2.0)  # 0.6m/24吋 基准 1.0 × 倍率 2.0

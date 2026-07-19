@@ -268,6 +268,15 @@ class SettingsDialog(QDialog):
                                lambda v: f"{v}%"), "")
         self._row(form, "影子颜色", self._color_button("display/overlay_color"),
                   "深色背景下可改浅色提高可见度")
+        self._row(form, "摄像头到屏幕距离(米)",
+                  self._dspin("display/camera_screen_offset_m", -2.0, 10.0, 0.1, 1),
+                  "摄像头装在屏幕前方时填正值;0 表示摄像头就在屏幕平面(如笔记本)")
+        self._row(form, "手影大小倍率",
+                  self._slider("display/hand_scale_multiplier", 50, 300,
+                               lambda v: v / 100.0,
+                               lambda s: round(float(s) * 100),
+                               lambda v: f"{v}%"),
+                  "物理模型算完后的整体微调,大屏看不清就调大")
         self._row(form, "目标显示器", self._monitor_combo("display/monitor"), "")
         return page
 

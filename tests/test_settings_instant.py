@@ -100,3 +100,13 @@ def test_pause_hotkey_editing_finished_applies(qapp):
     assert dlg._cfg.get("general/pause_hotkey") == "<ctrl>+p"
     assert dlg._apply_timer.isActive() is True           # 轻量键走 apply 防抖
     assert dlg._restart_timer.isActive() is False        # 不是重启键
+
+
+def test_scale_keys_are_light_and_instant(qapp):
+    dlg = _dlg(qapp)
+    dlg.field_widget("display/camera_screen_offset_m").setValue(1.5)
+    assert dlg._cfg.get("display/camera_screen_offset_m") == pytest.approx(1.5)
+    dlg.field_widget("display/hand_scale_multiplier").setValue(200)
+    assert dlg._cfg.get("display/hand_scale_multiplier") == pytest.approx(2.0)
+    assert dlg._apply_timer.isActive() is True     # 轻量合并
+    assert dlg._restart_timer.isActive() is False  # 不触发视觉重启
