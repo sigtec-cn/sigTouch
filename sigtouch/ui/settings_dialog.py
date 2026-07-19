@@ -4,6 +4,8 @@ _fields 注册表 (key -> (widget, getter, setter)) 与 field_widget()/apply() �
 控件变更即时写入 Config:普通键立即发 settings_applied,摄像头组与控制手
 进入 500ms 防抖后发 vision_restart_needed(重启视觉线程代价高,合并连续改动)。
 """
+import html
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QGuiApplication
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox,
@@ -31,8 +33,8 @@ class SettingsDialog(QDialog):
     def __init__(self, cfg: Config, parent=None):
         super().__init__(parent)
         self.setWindowTitle("SigTouch 设置")
-        self.setMinimumSize(660, 540)
-        self.resize(660, 540)
+        self.setMinimumSize(660, 600)
+        self.resize(660, 600)
         self._cfg = cfg
         self._fields: dict[str, tuple] = {}
         self._loading = False
@@ -321,7 +323,8 @@ class SettingsDialog(QDialog):
 
     def refresh_hotkey_label(self) -> None:
         key = format_hotkey(self._cfg.get("general/pause_hotkey"))
-        self._hotkey_line.setText(f'切换快捷键:<b>{key}</b>(在"通用"页可修改)')
+        self._hotkey_line.setText(
+            f'切换快捷键:<b>{html.escape(key)}</b>(在"通用"页可修改)')
 
     # ---- 加载/应用/恢复 ----
     def field_widget(self, key):

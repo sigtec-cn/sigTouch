@@ -265,3 +265,60 @@ def test_refresh_tray_state_syncs_settings_dialog(qapp, monkeypatch):
     a._refresh_tray_state()
     assert synced == ["paused"]      # 托盘刷新时同步设置窗
     assert a._current_state() == "paused"
+
+
+def test_hotkey_change_refreshes_tray(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self): pass
+        def release_all(self): pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    monkeypatch.setattr("sigtouch.platformsupport.autostart.set_autostart", lambda *_: None)
+    a = _make_app(monkeypatch)
+    calls = []
+    monkeypatch.setattr(a._tray, "set_state", lambda s, hk="": calls.append((s, hk)))
+    a._cfg.set("general/pause_hotkey", "<cmd>+<shift>+s")
+    a._apply_light_settings()
+    assert calls and calls[-1][1] == "Cmd+Shift+S"
+
+
+def test_show_settings_uses_ui_state_not_recomputed(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self): pass
+        def release_all(self): pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    a._apply_state("error")               # 摄像头错误态
+    seen = []
+    monkeypatch.setattr(a._settings_dlg, "set_running_state", lambda s: seen.append(s))
+    monkeypatch.setattr(a._settings_dlg, "show", lambda: None)
+    monkeypatch.setattr(a._settings_dlg, "raise_", lambda: None)
+    a._show_settings()
+    assert seen == ["error"]              # 打开设置沿用 _ui_state,不回退成 active
+
+
+def test_blank_hotkey_no_tray_suffix(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self): pass
+        def release_all(self): pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    calls = []
+    monkeypatch.setattr(a._tray, "set_state", lambda s, hk="": calls.append((s, hk)))
+    a._cfg.set("general/pause_hotkey", "")
+    a._apply_state("active")
+    assert calls[-1] == ("active", "")    # 空快捷键不带后缀

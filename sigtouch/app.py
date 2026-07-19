@@ -103,6 +103,7 @@ class SigTouchApp(QObject):
         self._start_vision()
         if show_preview:
             self._show_preview()
+        self._ui_state = "active"
         self._refresh_tray_state()
 
         self._watchdog = QTimer(self)
@@ -242,8 +243,10 @@ class SigTouchApp(QObject):
         return "active"
 
     def _apply_state(self, state: str) -> None:
-        """统一把状态同步到托盘与设置窗(带人读快捷键)。"""
-        hotkey = format_hotkey(self._cfg.get("general/pause_hotkey"))
+        """统一把状态同步到托盘与设置窗(带人读快捷键);_ui_state 是当前 UI 状态的唯一真源。"""
+        self._ui_state = state
+        raw = self._cfg.get("general/pause_hotkey").strip()
+        hotkey = format_hotkey(raw) if raw else ""
         self._tray.set_state(state, hotkey)
         self._settings_dlg.set_running_state(state)
 
@@ -251,7 +254,7 @@ class SigTouchApp(QObject):
         self._apply_state(self._current_state())
 
     def _show_settings(self) -> None:
-        self._settings_dlg.set_running_state(self._current_state())
+        self._settings_dlg.set_running_state(self._ui_state)
         self._settings_dlg.refresh_hotkey_label()
         self._settings_dlg.show()
         self._settings_dlg.raise_()
@@ -275,6 +278,7 @@ class SigTouchApp(QObject):
         self._build_interaction()
         self._overlay.apply_screen()
         self._setup_hotkey()
+        self._refresh_tray_state()
 
     def _on_vision_restart_needed(self) -> None:
         """摄像头组/控制手改动:轻量应用 + 重启视觉线程。"""
