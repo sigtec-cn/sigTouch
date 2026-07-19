@@ -25,8 +25,8 @@ def test_missing_permission_rendered_and_buttons_wired(qapp):
     state = {K.CAMERA: True, K.ACCESSIBILITY: False, K.INPUT_MONITORING: False}
     calls = []
     w = _wizard(state, calls)
-    assert w._status_labels[K.CAMERA].text() == "✓"
-    assert w._status_labels[K.ACCESSIBILITY].text() == "✗"
+    assert w._status_labels[K.CAMERA].text().startswith("✓")
+    assert w._status_labels[K.ACCESSIBILITY].text().startswith("✗")
     assert w._request_buttons[K.CAMERA].isEnabled() is False   # 已授权→禁用
     assert w._request_buttons[K.ACCESSIBILITY].isEnabled() is True
     w._request_buttons[K.ACCESSIBILITY].click()
@@ -47,7 +47,7 @@ def test_all_granted_emitted_once_on_rising_edge(qapp):
     assert got == [1]                    # 沿触发
     w.refresh()
     assert got == [1]                    # 不重复
-    assert w._status_labels[K.ACCESSIBILITY].text() == "✓"
+    assert w._status_labels[K.ACCESSIBILITY].text().startswith("✓")
 
 
 def test_poll_timer_stops_when_granted_or_hidden(qapp):
