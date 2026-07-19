@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication
 from sigtouch.config import Config
 from sigtouch.interaction import features as F
 from sigtouch.interaction.gestures import GestureStateMachine
+from sigtouch.interaction.hotkey import format_hotkey
 from sigtouch.interaction.mapper import CursorMapper
 from sigtouch.output.injector import Injector
 from sigtouch.perception.distance import overlay_scale
@@ -76,7 +77,7 @@ class SigTouchApp(QObject):
             self._on_vision_restart_needed)
         self._tray = TrayController(self)
         self._tray.toggle_requested.connect(self._toggle_pause)
-        self._tray.settings_requested.connect(self._settings_dlg.show)
+        self._tray.settings_requested.connect(self._show_settings)
         self._tray.preview_requested.connect(self._show_preview)
         self._tray.quit_requested.connect(self._quit)
         self._tray.permissions_requested.connect(self._show_wizard)
@@ -149,7 +150,7 @@ class SigTouchApp(QObject):
         self._vision.result_ready.connect(self._on_result)
         self._vision.preview_frame.connect(self._preview.update_frame)
         self._vision.camera_error.connect(
-            lambda _msg: self._tray.set_state("error"))
+            lambda _msg: self._apply_state("error"))
         self._vision.recovered.connect(self._refresh_tray_state)
         self._vision.set_preview(self._preview.isVisible())
         self._vision.start()
@@ -232,13 +233,28 @@ class SigTouchApp(QObject):
             self._vision.set_idle(True)
         self._refresh_tray_state()
 
-    def _refresh_tray_state(self) -> None:
+    def _current_state(self) -> str:
+        """常规三态(error 为瞬时态,由 camera_error 信号单独驱动)。"""
         if self._paused:
-            self._tray.set_state("paused")
-        elif not perms.all_granted():
-            self._tray.set_state("permission")
-        else:
-            self._tray.set_state("active")
+            return "paused"
+        if not perms.all_granted():
+            return "permission"
+        return "active"
+
+    def _apply_state(self, state: str) -> None:
+        """统一把状态同步到托盘与设置窗(带人读快捷键)。"""
+        hotkey = format_hotkey(self._cfg.get("general/pause_hotkey"))
+        self._tray.set_state(state, hotkey)
+        self._settings_dlg.set_running_state(state)
+
+    def _refresh_tray_state(self) -> None:
+        self._apply_state(self._current_state())
+
+    def _show_settings(self) -> None:
+        self._settings_dlg.set_running_state(self._current_state())
+        self._settings_dlg.refresh_hotkey_label()
+        self._settings_dlg.show()
+        self._settings_dlg.raise_()
 
     def _show_preview(self) -> None:
         self._preview.show()

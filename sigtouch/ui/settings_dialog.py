@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox,
                                QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from sigtouch.config import DEFAULTS, Config
+from sigtouch.interaction.hotkey import format_hotkey
+from sigtouch.ui import theme
 
 _RESTART_KEYS = frozenset({
     "camera/index", "camera/width", "camera/height", "camera/fov_deg",
@@ -45,6 +47,17 @@ class SettingsDialog(QDialog):
         self._apply_timer.setInterval(_APPLY_DEBOUNCE_MS)
         self._apply_timer.timeout.connect(self.settings_applied)
 
+        status_card = QFrame()
+        status_card.setProperty("class", "card")
+        sv = QVBoxLayout(status_card)
+        sv.setContentsMargins(14, 10, 14, 10)
+        sv.setSpacing(2)
+        self._status_badge = QLabel()
+        sv.addWidget(self._status_badge)
+        self._hotkey_line = QLabel()
+        self._hotkey_line.setProperty("class", "muted")
+        sv.addWidget(self._hotkey_line)
+
         nav = QListWidget()
         nav.setFixedWidth(140)
         nav.addItems(_NAV_ITEMS)
@@ -70,9 +83,12 @@ class SettingsDialog(QDialog):
         body.addWidget(self._stack, 1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 16, 12)
+        layout.addWidget(status_card)
         layout.addLayout(body, 1)
         layout.addLayout(bottom)
         self._load()
+        self.set_running_state("active")
+        self.refresh_hotkey_label()
 
     # ---- 页面骨架 ----
     def _page(self, title: str) -> tuple:
@@ -111,6 +127,8 @@ class SettingsDialog(QDialog):
             self._restart_timer.start()
         else:
             self._apply_timer.start()
+        if key == "general/pause_hotkey":
+            self.refresh_hotkey_label()
 
     def _spin(self, key, lo, hi):
         w = QSpinBox()
@@ -286,6 +304,24 @@ class SettingsDialog(QDialog):
         self._row(form, "暂停快捷键", self._text("general/pause_hotkey"),
                   "pynput 组合键语法,留空禁用;默认 Ctrl+Alt+P")
         return page
+
+    # ---- 状态卡 ----
+    _STATE_TEXT = {
+        "active": ("● 使用中", theme.OK),
+        "paused": ("● 已暂停(不控制鼠标)", theme.TEXT_MUTED),
+        "permission": ("● 等待权限授权", theme.WARN),
+        "error": ("● 摄像头异常", theme.DANGER),
+    }
+
+    def set_running_state(self, state: str) -> None:
+        text, color = self._STATE_TEXT.get(state, self._STATE_TEXT["active"])
+        self._status_badge.setText(text)
+        self._status_badge.setStyleSheet(
+            f"color: {color}; font-weight: 600; background: transparent;")
+
+    def refresh_hotkey_label(self) -> None:
+        key = format_hotkey(self._cfg.get("general/pause_hotkey"))
+        self._hotkey_line.setText(f'切换快捷键:<b>{key}</b>(在"通用"页可修改)')
 
     # ---- 加载/应用/恢复 ----
     def field_widget(self, key):

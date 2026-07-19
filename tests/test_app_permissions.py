@@ -242,3 +242,26 @@ def test_overlay_scale_consumes_offset_and_multiplier(qapp, monkeypatch):
     a._on_result(FrameResult(timestamp_ms=0, hand=open_hand(),
                              face_distance_m=0.6, face_present=True))
     assert scales and scales[0] == pytest.approx(2.0)  # 0.6m/24吋 基准 1.0 × 倍率 2.0
+
+
+def test_refresh_tray_state_syncs_settings_dialog(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    synced = []
+    monkeypatch.setattr(a._settings_dlg, "set_running_state",
+                        lambda s: synced.append(s))
+    a._paused = True
+    a._refresh_tray_state()
+    assert synced == ["paused"]      # 托盘刷新时同步设置窗
+    assert a._current_state() == "paused"
