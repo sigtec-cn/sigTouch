@@ -48,8 +48,14 @@ class TrayController(QObject):
         self._tray.setToolTip("SigTouch:运行中")
         self._tray.show()
 
-    def set_state(self, state: str) -> None:
+    def set_state(self, state: str, hotkey_label: str = "") -> None:
         color, tip, toggle_text = _STATE_META[state]
         self._tray.setIcon(make_icon(color))
-        self._tray.setToolTip(tip)
-        self._toggle_action.setText(toggle_text)
+        if hotkey_label:
+            # 切换动作词 = 去掉 emoji 前缀的核心("⏸ 暂停" -> "暂停")
+            action_word = toggle_text.split(" ", 1)[-1]
+            self._tray.setToolTip(f"{tip} ({hotkey_label} {action_word})")
+            self._toggle_action.setText(f"{toggle_text} ({hotkey_label})")
+        else:
+            self._tray.setToolTip(tip)
+            self._toggle_action.setText(toggle_text)
