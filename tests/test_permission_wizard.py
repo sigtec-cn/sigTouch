@@ -77,3 +77,6 @@ def test_tray_permission_state_and_menu(qapp):
     t.set_state("active")
     assert "Ctrl+Alt+P" not in t._toggle_action.text()
     assert t._toggle_action.text() == "⏸ 暂停"
+    t.set_state("paused", "Ctrl+Alt+P")
+    assert t._toggle_action.text() == "▶ 恢复 (Ctrl+Alt+P)"
+    assert "恢复" in t._tray.toolTip()

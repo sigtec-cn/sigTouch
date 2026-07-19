@@ -347,6 +347,7 @@ class SettingsDialog(QDialog):
             for key in self._fields:
                 self._cfg.set(key, DEFAULTS[key])
             self._load()
+            self.refresh_hotkey_label()
         finally:
             self._loading = False
         self.settings_applied.emit()

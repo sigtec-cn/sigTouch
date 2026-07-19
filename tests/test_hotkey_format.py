@@ -28,3 +28,9 @@ def test_plain_letter():
 
 def test_unknown_segment_titlecased():
     assert format_hotkey("<ctrl>+<media_play>") == "Ctrl+Media_Play"
+
+
+def test_malformed_inputs_degrade_gracefully():
+    assert format_hotkey("<ctrl>+") == "Ctrl"
+    assert format_hotkey("<ctrl>++p") == "Ctrl+P"
+    assert format_hotkey("<>") == "未设置"

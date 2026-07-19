@@ -41,3 +41,12 @@ def test_hotkey_line_updates_on_field_change(qapp):
     dlg.field_widget("general/pause_hotkey").setText("<cmd>+<shift>+s")
     dlg.field_widget("general/pause_hotkey").editingFinished.emit()
     assert "Cmd+Shift+S" in dlg._hotkey_line.text()
+
+
+def test_restore_defaults_refreshes_hotkey_line(qapp):
+    dlg = _dlg(qapp)
+    dlg.field_widget("general/pause_hotkey").setText("<cmd>+<shift>+s")
+    dlg.field_widget("general/pause_hotkey").editingFinished.emit()
+    assert "Cmd+Shift+S" in dlg._hotkey_line.text()
+    dlg._restore_defaults()
+    assert "Ctrl+Alt+P" in dlg._hotkey_line.text()   # 恢复默认后同步
