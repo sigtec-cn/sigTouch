@@ -48,6 +48,10 @@ class PreviewWindow(QWidget):
         if r is not None and r.face_distance_m is not None:
             cv2.putText(bgr, f"dist={r.face_distance_m:.2f}m", (10, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+        if r is not None:
+            cv2.putText(bgr, f"faces={r.face_count} hands={r.hand_count}",
+                        (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                        (200, 200, 200), 2)
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         img = QImage(rgb.data, w, h, 3 * w, QImage.Format.Format_RGB888)
         self._label.setPixmap(QPixmap.fromImage(img))

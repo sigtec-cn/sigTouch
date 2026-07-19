@@ -21,3 +21,5 @@ def test_black_frame_yields_no_hand_and_default_distance():
     assert result.face_distance_m is None  # 从未见过人脸
     assert result.face_present is False
     assert result.timestamp_ms == 0
+    assert result.face_count == 0
+    assert result.hand_count == 0
