@@ -18,6 +18,7 @@ _RESTART_KEYS = frozenset({
     "interaction/active_hand",
 })
 _DEBOUNCE_MS = 500
+_APPLY_DEBOUNCE_MS = 200
 _NAV_ITEMS = ["📷 摄像头", "✋ 交互", "🎨 显示", "⚙️ 通用"]
 
 
@@ -28,7 +29,8 @@ class SettingsDialog(QDialog):
     def __init__(self, cfg: Config, parent=None):
         super().__init__(parent)
         self.setWindowTitle("SigTouch 设置")
-        self.setFixedSize(660, 480)
+        self.setMinimumSize(660, 540)
+        self.resize(660, 540)
         self._cfg = cfg
         self._fields: dict[str, tuple] = {}
         self._loading = False
@@ -37,6 +39,11 @@ class SettingsDialog(QDialog):
         self._restart_timer.setSingleShot(True)
         self._restart_timer.setInterval(_DEBOUNCE_MS)
         self._restart_timer.timeout.connect(self.vision_restart_needed)
+
+        self._apply_timer = QTimer(self)
+        self._apply_timer.setSingleShot(True)
+        self._apply_timer.setInterval(_APPLY_DEBOUNCE_MS)
+        self._apply_timer.timeout.connect(self.settings_applied)
 
         nav = QListWidget()
         nav.setFixedWidth(140)
@@ -88,10 +95,11 @@ class SettingsDialog(QDialog):
 
     def _row(self, form: QFormLayout, label: str, widget, desc: str) -> None:
         form.addRow(label, widget)
-        hint = QLabel(desc)
-        hint.setProperty("class", "muted")
-        hint.setWordWrap(True)
-        form.addRow("", hint)
+        if desc:
+            hint = QLabel(desc)
+            hint.setProperty("class", "muted")
+            hint.setWordWrap(True)
+            form.addRow("", hint)
 
     # ---- 控件工厂(注册 + 即时生效接线)----
     def _on_field_changed(self, key: str) -> None:
@@ -102,7 +110,7 @@ class SettingsDialog(QDialog):
         if key in _RESTART_KEYS:
             self._restart_timer.start()
         else:
-            self.settings_applied.emit()
+            self._apply_timer.start()
 
     def _spin(self, key, lo, hi):
         w = QSpinBox()
@@ -141,6 +149,7 @@ class SettingsDialog(QDialog):
         w.setRange(lo, hi)
         val = QLabel()
         val.setFixedWidth(44)
+        val.setText(fmt(w.value()))
         w.valueChanged.connect(lambda v: val.setText(fmt(v)))
         h.addWidget(w, 1)
         h.addWidget(val)
@@ -186,7 +195,11 @@ class SettingsDialog(QDialog):
             value = str(value)
             w.setProperty("color_hex", value)
             w.setText(value)
-            w.setStyleSheet(f"background-color: {value}; color: white;")
+            hexval = value.lstrip("#")
+            r, g, b = (int(hexval[i:i + 2], 16) for i in (0, 2, 4))
+            luminance = r * 0.299 + g * 0.587 + b * 0.114
+            text_color = "black" if luminance > 140 else "white"
+            w.setStyleSheet(f"background-color: {value}; color: {text_color};")
 
         def pick(_=False):
             from PySide6.QtWidgets import QColorDialog
