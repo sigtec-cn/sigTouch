@@ -86,3 +86,27 @@ def test_disabled_gesture_emits_nothing():
     m = _machine(**{"gestures/left_click": False})
     evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (open_hand(), 120)])
     assert evs == []
+
+
+def test_hand_switch_mid_pinch_does_not_click():
+    m = _machine()
+    evs = _run(m, [(open_hand(), 0),
+                   (pinch_index(), 33),            # 旁观者半捏合抢到选择
+                   (open_hand(dx=0.4), 100),       # 切回远处操作者的张开手(瞬移)
+                   (open_hand(dx=0.4), 200)])
+    assert Event(EventKind.LEFT_CLICK) not in evs  # 不产生幻影点击
+
+
+def test_hand_switch_mid_drag_ends_drag_once():
+    m = _machine()
+    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (pinch_index(), 320),
+                   (open_hand(dx=0.4), 400),       # 拖拽中被另一只手抢走(瞬移)
+                   (open_hand(dx=0.4), 500)])
+    assert evs == [Event(EventKind.DRAG_START), Event(EventKind.DRAG_END)]
+
+
+def test_small_movement_not_treated_as_teleport():
+    m = _machine()
+    evs = _run(m, [(open_hand(), 0), (pinch_index(dx=0.05), 33),
+                   (open_hand(dx=0.05), 120)])     # 正常小位移
+    assert evs == [Event(EventKind.LEFT_CLICK)]    # 快捻仍正常成立

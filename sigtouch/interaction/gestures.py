@@ -3,6 +3,7 @@
 阈值全部按手掌尺寸归一化;捏合判定用进入/退出双阈值(滞回);
 离散事件(点击/回车/退格)有独立冷却窗口防连发。
 """
+import math
 from dataclasses import dataclass
 from enum import Enum, auto
 
@@ -36,6 +37,8 @@ class _State(Enum):
     OK_PENDING = auto()    # Task 7
     OK_FIRED = auto()      # Task 7
 
+_TELEPORT_THRESHOLD = 0.25  # 归一化锚点单帧跳变超过此值视为换手/瞬移
+
 _PINCH_STATES = frozenset({_State.INDEX_PINCH, _State.DRAGGING,
                            _State.MIDDLE_PINCH, _State.SCROLLING,
                            _State.OK_PENDING, _State.OK_FIRED})
@@ -60,6 +63,7 @@ class GestureStateMachine:
         self._scroll_last_y: float | None = None
         self._scroll_accum = 0.0
         self._push_history: list[tuple[int, float]] = []  # Task 7
+        self._last_anchor: tuple[float, float] | None = None
         self.feedback: str | None = None                   # Task 7 赋值
 
     @property
@@ -90,7 +94,21 @@ class GestureStateMachine:
             self._to(_State.IDLE, t_ms)
             self._scroll_last_y = None
             self._push_history.clear()
+            self._last_anchor = None
             return out
+
+        anchor = F.anchor_point(hand)
+        if self._last_anchor is not None and \
+                math.dist(anchor, self._last_anchor) > _TELEPORT_THRESHOLD:
+            # 锚点瞬移:多人场景换手或检测跳变——按手部丢失处理,吸收不连续
+            if self._state is _State.DRAGGING:
+                self._emit(out, EventKind.DRAG_END, t_ms)
+            self._to(_State.IDLE, t_ms)
+            self._scroll_last_y = None
+            self._push_history.clear()
+            self._last_anchor = anchor
+            return out
+        self._last_anchor = anchor
 
         enter = self._c.get("interaction/pinch_enter")
         exit_ = self._c.get("interaction/pinch_exit")
