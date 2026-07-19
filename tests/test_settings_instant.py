@@ -24,8 +24,17 @@ def test_light_key_applies_immediately_and_signals(qapp):
     dlg.settings_applied.connect(lambda: got.append(1))
     dlg.field_widget("display/overlay_opacity").setValue(80)  # 滑杆 80%
     assert dlg._cfg.get("display/overlay_opacity") == pytest.approx(0.80)
-    assert got == [1]                                   # 立即发且只发一次
+    assert got == []                                    # 尚未发出,合并进 200ms 防抖
+    assert dlg._apply_timer.isActive() is True          # 轻量键走 apply 防抖
     assert dlg._restart_timer.isActive() is False       # 轻量键不碰重启防抖
+
+    dlg.field_widget("display/overlay_opacity").setValue(85)  # 防抖期内再次改动
+    assert dlg._cfg.get("display/overlay_opacity") == pytest.approx(0.85)  # 配置仍即时写入
+    assert got == []                                    # 仍未发出
+
+    dlg._apply_timer.stop()
+    dlg._apply_timer.timeout.emit()                      # 模拟防抖到期
+    assert got == [1]                                    # 两次改动合并为一次信号
 
 
 def test_restart_key_debounces_single_signal(qapp):
@@ -50,6 +59,7 @@ def test_load_does_not_emit_signals(qapp):
     dlg.vision_restart_needed.connect(lambda: got.append("v"))
     dlg._load()                                         # 显式重载同样安静
     assert got == []
+    assert dlg._apply_timer.isActive() is False
 
 
 def test_restore_defaults_reverts_and_applies(qapp):
@@ -69,3 +79,24 @@ def test_slider_mappings(qapp):
     assert dlg._cfg.get("interaction/box_margin") == pytest.approx(0.20)
     dlg.field_widget("interaction/smooth_min_cutoff").setValue(25)
     assert dlg._cfg.get("interaction/smooth_min_cutoff") == pytest.approx(2.5)
+
+
+def test_restart_debounce_survives_dialog_close(qapp):
+    dlg = _dlg(qapp)
+    fired = []
+    dlg.vision_restart_needed.connect(lambda: fired.append(1))
+    dlg.field_widget("camera/index").setValue(1)
+    dlg.close()
+    dlg._restart_timer.stop()
+    dlg._restart_timer.timeout.emit()                   # 关闭后手动模拟防抖到期
+    assert fired == [1]                                 # 关闭对话框不丢失待发信号
+
+
+def test_pause_hotkey_editing_finished_applies(qapp):
+    dlg = _dlg(qapp)
+    field = dlg.field_widget("general/pause_hotkey")
+    field.setText("<ctrl>+p")
+    field.editingFinished.emit()
+    assert dlg._cfg.get("general/pause_hotkey") == "<ctrl>+p"
+    assert dlg._apply_timer.isActive() is True           # 轻量键走 apply 防抖
+    assert dlg._restart_timer.isActive() is False        # 不是重启键
