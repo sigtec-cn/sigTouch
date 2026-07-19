@@ -1,5 +1,7 @@
 # packaging/sigtouch.spec
 # 用法: pyinstaller packaging/sigtouch.spec  (在仓库根目录执行)
+import sys as _sys
+
 from PyInstaller.utils.hooks import collect_data_files
 
 datas = collect_data_files("mediapipe")          # mediapipe 自带资源
@@ -19,12 +21,14 @@ exe = EXE(
     exclude_binaries=True,       # onedir:二进制留在 COLLECT(LGPL 合规)
     name="SigTouch",
     console=False,
+    icon="../assets/icon.ico" if _sys.platform == "win32" else None,
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="SigTouch")
 
 app = BUNDLE(
     coll,
     name="SigTouch.app",
+    icon="../assets/icon.icns",
     bundle_identifier="cn.sigtec.sigtouch",
     info_plist={
         "NSCameraUsageDescription":

@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pyinstaller>=6.6"]
+dev = ["pytest>=8.0", "pyinstaller>=6.6", "pillow>=10.0"]
 
 [project.scripts]
 sigtouch = "sigtouch.app:main"
