@@ -5,7 +5,8 @@ from collections import deque
 IPD_M = 0.063          # 成人平均瞳距
 REF_DISTANCE_M = 0.6   # 缩放基准:0.6m 处 24 吋屏 scale=1.0
 REF_DIAG_INCH = 24.0
-SCALE_MIN, SCALE_MAX = 0.5, 3.0
+SCALE_MIN, SCALE_MAX = 0.5, 5.0
+_MIN_SCREEN_DISTANCE_M = 0.05
 
 
 def focal_px(frame_width_px: int, fov_deg: float) -> float:
@@ -34,7 +35,13 @@ class DistanceSmoother:
         return sum(self._buf) / len(self._buf)
 
 
-def overlay_scale(distance_m: float, diag_inch: float) -> float:
-    """轮廓大小(占屏比例)相对基准的倍率:比例 ∝ 距离 ÷ 屏幕尺寸,保持视野张角恒定。"""
-    raw = (distance_m / REF_DISTANCE_M) * (REF_DIAG_INCH / diag_inch)
+def overlay_scale(distance_m: float, diag_inch: float,
+                  offset_m: float = 0.0, multiplier: float = 1.0) -> float:
+    """轮廓大小(占屏比例)相对基准的倍率:比例 ∝ 人到屏距离 ÷ 屏幕尺寸,再乘用户倍率。
+
+    distance_m 是虹膜法测得的人到摄像头距离;offset_m 是摄像头到屏幕平面的距离
+    (摄像头在屏幕前为正),两者之和才是缩放所需的人到屏幕距离。
+    """
+    d_screen = max(_MIN_SCREEN_DISTANCE_M, distance_m + offset_m)
+    raw = (d_screen / REF_DISTANCE_M) * (REF_DIAG_INCH / diag_inch) * multiplier
     return max(SCALE_MIN, min(SCALE_MAX, raw))

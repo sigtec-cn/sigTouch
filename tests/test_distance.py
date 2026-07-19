@@ -34,5 +34,26 @@ def test_overlay_scale_formula_and_clamp():
     assert overlay_scale(0.6, 24.0) == pytest.approx(1.0)   # 基准
     assert overlay_scale(1.2, 24.0) == pytest.approx(2.0)   # 距离翻倍
     assert overlay_scale(0.6, 48.0) == pytest.approx(0.5)   # 屏幕翻倍
-    assert overlay_scale(5.0, 24.0) == pytest.approx(3.0)   # 上限
+    assert overlay_scale(5.0, 24.0) == pytest.approx(5.0)   # 上限
     assert overlay_scale(0.3, 96.0) == pytest.approx(0.5)   # 下限
+
+
+def test_overlay_scale_offset_shifts_screen_distance():
+    # 摄像头在屏前 0.6m:人到屏 = 0.6+0.6 = 1.2m → 2.0
+    assert overlay_scale(0.6, 24.0, offset_m=0.6) == pytest.approx(2.0)
+    # 负偏移(摄像头在屏后,如屏前投影场景):1.2-0.6 = 0.6m → 1.0
+    assert overlay_scale(1.2, 24.0, offset_m=-0.6) == pytest.approx(1.0)
+
+
+def test_overlay_scale_multiplier():
+    assert overlay_scale(0.6, 24.0, 0.0, 2.0) == pytest.approx(2.0)
+    assert overlay_scale(3.0, 24.0, 0.0, 2.0) == pytest.approx(5.0)  # 10.0 截到上限
+
+
+def test_overlay_scale_floor_protection_on_extreme_negative_offset():
+    # d_screen 被压到 0.05m 下限 → raw 极小 → 下限 0.5
+    assert overlay_scale(0.3, 24.0, offset_m=-0.5) == pytest.approx(0.5)
+
+
+def test_overlay_scale_two_arg_backward_compat():
+    assert overlay_scale(1.2, 24.0) == pytest.approx(2.0)

@@ -24,6 +24,8 @@ DEFAULTS: dict[str, Any] = {
     "display/overlay_opacity": 0.35,
     "display/overlay_color": "#000000",  # 深色影子默认
     "display/monitor": 0,
+    "display/camera_screen_offset_m": 0.0,  # 摄像头到屏幕平面距离(米,摄像头在屏前为正)
+    "display/hand_scale_multiplier": 1.0,   # 手影大小倍率(物理模型后的用户微调)
     "gestures/left_click": True,
     "gestures/right_click": True,
     "gestures/scroll": True,
