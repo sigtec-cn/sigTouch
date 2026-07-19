@@ -113,8 +113,6 @@ def test_settings_applied_mid_drag_releases_button(app_obj, monkeypatch):
     dispatched_kinds = [c[1] for c in app_obj._injector.calls if c[0] == "dispatch"]
     assert EventKind.DRAG_START in dispatched_kinds
 
-    # _restart_vision 会断开信号,stub 视觉线程没有 Qt 信号对象,规避掉
-    monkeypatch.setattr(app_obj, "_restart_vision", lambda: None)
     monkeypatch.setattr("sigtouch.platformsupport.autostart.set_autostart",
                         lambda enabled: None)
 
