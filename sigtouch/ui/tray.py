@@ -1,4 +1,6 @@
 """系统托盘:三态图标 + 菜单。"""
+import sys
+
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
@@ -37,7 +39,8 @@ class TrayController(QObject):
         preview.triggered.connect(self.preview_requested)
         menu.addAction(preview)
         menu.addSeparator()
-        quit_ = QAction("⏻ 退出", menu)
+        quit_text = "退出" if sys.platform == "win32" else "⏻ 退出"
+        quit_ = QAction(quit_text, menu)
         quit_.triggered.connect(self.quit_requested)
         menu.addAction(quit_)
         self._menu = menu  # 持引用防 GC
