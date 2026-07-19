@@ -24,6 +24,9 @@ class PreviewWindow(QWidget):
         self._label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         layout = QVBoxLayout(self)
         layout.addWidget(self._label)
+        self.setStyleSheet("background: #101418;")
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.resize(800, 620)
         self._last_result = None
 
     def update_result(self, result) -> None:

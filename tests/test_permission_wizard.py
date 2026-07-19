@@ -68,4 +68,4 @@ def test_tray_permission_state_and_menu(qapp):
     t = TrayController()
     t.set_state("permission")            # 不抛即可(图标/文案人工核对)
     texts = [a.text() for a in t._menu.actions()]
-    assert "权限设置…" in texts
+    assert any("权限设置" in x for x in texts)

@@ -13,11 +13,12 @@ def make_icon(color_hex: str) -> QIcon:
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setBrush(QColor(color_hex))
     p.setPen(Qt.PenStyle.NoPen)
-    p.drawEllipse(8, 8, 48, 48)
-    p.setBrush(QColor("#ffffff"))
-    p.drawEllipse(24, 18, 7, 22)   # 简化的"手指"示意
-    p.drawEllipse(34, 16, 7, 24)
+    p.setBrush(QColor(color_hex))
+    p.drawEllipse(2, 2, 60, 60)
+    p.setBrush(QColor("#FFFFFF"))
+    p.drawEllipse(20, 30, 24, 22)                      # 掌
+    for x, h in ((14, 14), (22, 18), (30, 20), (38, 18), (46, 13)):
+        p.drawRoundedRect(x, 34 - h, 6, h, 3, 3)       # 五指圆头短柱
     p.end()
     return QIcon(pm)
