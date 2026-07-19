@@ -284,6 +284,8 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("SigTouch")
+    from sigtouch.ui.theme import apply_theme
+    apply_theme(app)
     from PySide6.QtWidgets import QMessageBox
 
     from sigtouch.perception.pipeline import MODELS_DIR
