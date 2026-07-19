@@ -119,7 +119,7 @@ def test_settings_applied_mid_drag_releases_button(app_obj, monkeypatch):
                         lambda enabled: None)
 
     calls_before = len(app_obj._injector.calls)
-    app_obj._on_settings_applied()
+    app_obj._apply_light_settings()
 
     release_calls = [c for c in app_obj._injector.calls[calls_before:]
                      if c[0] == "release_all"]

@@ -184,3 +184,27 @@ def test_overlay_receives_mapper_cursor(qapp, monkeypatch):
     assert calls and calls[0] is not None
     ox, oy = a._screen_origin
     assert a._injector.moves[0] == (calls[0][0] + ox, calls[0][1] + oy)
+
+
+def test_light_settings_do_not_restart_vision(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    monkeypatch.setattr(
+        "sigtouch.platformsupport.autostart.set_autostart", lambda *_: None)
+    a = _make_app(monkeypatch)
+    restarts = []
+    monkeypatch.setattr(a, "_restart_vision", lambda: restarts.append(1))
+    a._apply_light_settings()
+    assert restarts == []            # 轻量路径不重启视觉线程
+    a._on_vision_restart_needed()
+    assert restarts == [1]           # 重启路径走 _restart_vision

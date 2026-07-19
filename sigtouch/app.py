@@ -71,7 +71,9 @@ class SigTouchApp(QObject):
         self._overlay.apply_screen()
         self._preview = PreviewWindow()
         self._settings_dlg = SettingsDialog(cfg)
-        self._settings_dlg.settings_applied.connect(self._on_settings_applied)
+        self._settings_dlg.settings_applied.connect(self._apply_light_settings)
+        self._settings_dlg.vision_restart_needed.connect(
+            self._on_vision_restart_needed)
         self._tray = TrayController(self)
         self._tray.toggle_requested.connect(self._toggle_pause)
         self._tray.settings_requested.connect(self._settings_dlg.show)
@@ -240,7 +242,8 @@ class SigTouchApp(QObject):
         self._preview.show()
         self._vision.set_preview(True)
 
-    def _on_settings_applied(self) -> None:
+    def _apply_light_settings(self) -> None:
+        """设置即时生效的轻量路径:不重启视觉线程。"""
         # 先释放:_build_interaction() 会丢弃旧 GestureStateMachine,若正处于
         # DRAGGING 状态 DRAG_END 将永远不会发出,导致鼠标左键卡在按下状态。
         if self._injector is not None:
@@ -254,6 +257,10 @@ class SigTouchApp(QObject):
         self._build_interaction()
         self._overlay.apply_screen()
         self._setup_hotkey()
+
+    def _on_vision_restart_needed(self) -> None:
+        """摄像头组/控制手改动:轻量应用 + 重启视觉线程。"""
+        self._apply_light_settings()
         self._restart_vision()
 
     def _check_watchdog(self) -> None:
