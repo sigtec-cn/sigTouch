@@ -258,6 +258,8 @@ class SigTouchApp(QObject):
         self._ui_state = state
         raw = self._cfg.get("general/pause_hotkey").strip()
         hotkey = format_hotkey(raw) if raw else ""
+        if hotkey and self._hotkey_needs_restart:
+            hotkey = f"{hotkey}·需重启"
         self._tray.set_state(state, hotkey)
         self._settings_dlg.set_running_state(state)
         self._overlay.set_topmost(state == "active")
@@ -346,10 +348,13 @@ def main() -> None:
     missing = [n for n in ("hand_landmarker.task", "face_landmarker.task")
                if not (MODELS_DIR / n).exists()]
     if missing:
-        QMessageBox.critical(
-            None, "缺少模型文件",
-            "缺少 MediaPipe 模型: " + ", ".join(missing)
-            + "\n\n请先运行: python scripts/download_models.py")
+        box = QMessageBox(QMessageBox.Icon.Critical, "缺少模型文件",
+                          "缺少 MediaPipe 模型: " + ", ".join(missing)
+                          + "\n\n请先运行: python scripts/download_models.py")
+        box.show()
+        box.raise_()
+        box.activateWindow()
+        box.exec()
         sys.exit(1)
 
     cfg = Config(QSettingsBackend())

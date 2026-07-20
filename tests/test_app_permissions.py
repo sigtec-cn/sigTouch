@@ -325,6 +325,27 @@ def test_blank_hotkey_no_tray_suffix(qapp, monkeypatch):
     assert calls[-1] == ("active", "")    # 空快捷键不带后缀
 
 
+def test_deferred_hotkey_labelled_needs_restart(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    a._hotkey_needs_restart = True
+    calls = []
+    monkeypatch.setattr(a._tray, "set_state", lambda s, hk="": calls.append(hk))
+    a._apply_state("active")
+    assert calls[-1].endswith("·需重启")
+
+
 def test_hotkey_started_when_granted_at_launch(qapp, monkeypatch):
     state = {k: True for k in K}
     _patch_perms(monkeypatch, state)

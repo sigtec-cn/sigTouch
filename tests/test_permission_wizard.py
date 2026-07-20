@@ -91,6 +91,24 @@ def test_wizard_without_restart_hint_backward_compatible(qapp):
     assert w._restart_row.isVisibleTo(w) is False   # 无 hint 恒隐藏
 
 
+def test_wizard_stays_open_when_restart_needed(qapp, monkeypatch):
+    from PySide6.QtCore import QTimer
+    from sigtouch.ui.permission_wizard import PermissionWizard
+    state = {K.CAMERA: True, K.ACCESSIBILITY: True, K.INPUT_MONITORING: True}
+    shots = []
+    monkeypatch.setattr(QTimer, "singleShot",
+                        staticmethod(lambda ms, fn: shots.append(ms)))
+    w = PermissionWizard(checker=lambda: dict(state),
+                         requester=lambda k: None, opener=lambda k: None,
+                         restart_hint=lambda: True)
+    assert w._restart_row.isVisibleTo(w) is True
+    assert shots == []                      # 不自动关闭
+    # 无需重启的普通全就绪:仍自动关闭
+    w2 = PermissionWizard(checker=lambda: dict(state),
+                          requester=lambda k: None, opener=lambda k: None)
+    assert shots and shots[-1] == 2000      # 构造时 refresh 触发关闭调度
+
+
 def test_tray_permission_state_and_menu(qapp):
     from sigtouch.ui.tray import TrayController
     t = TrayController()

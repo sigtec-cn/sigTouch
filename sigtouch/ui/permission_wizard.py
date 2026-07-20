@@ -120,14 +120,15 @@ class PermissionWizard(QDialog):
             self._request_buttons[kind].setEnabled(not ok)
         granted = all(snap.values())
         self._banner.setVisible(granted)
+        needs_restart = bool(self._restart_hint()) if self._restart_hint else False
+        self._restart_row.setVisible(needs_restart)
         if granted:
             self._timer.stop()
         if granted and not self._was_all_granted:
             self.all_granted.emit()
-            QTimer.singleShot(_CLOSE_DELAY_MS, self.close)
+            if not needs_restart:
+                QTimer.singleShot(_CLOSE_DELAY_MS, self.close)
         self._was_all_granted = granted
-        needs_restart = bool(self._restart_hint()) if self._restart_hint else False
-        self._restart_row.setVisible(needs_restart)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
