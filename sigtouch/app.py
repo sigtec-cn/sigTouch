@@ -1,6 +1,7 @@
 # sigtouch/app.py
 """入口与装配:视觉线程 → 手势/映射 → 注入/渲染,托盘控制,看门狗,挂起门。"""
 import logging
+import subprocess
 import sys
 import time
 
@@ -85,8 +86,11 @@ class SigTouchApp(QObject):
         self._hotkey_bridge = _HotkeyBridge()
         self._hotkey_bridge.pressed.connect(self._toggle_pause)
         self._hotkey_listener = None
+        self._im_granted_at_start = perms.check(PermissionKind.INPUT_MONITORING)
+        self._hotkey_needs_restart = False
 
-        self._wizard = PermissionWizard()
+        self._wizard = PermissionWizard(restart_hint=lambda: self._hotkey_needs_restart)
+        self._wizard.restart_requested.connect(self._restart_app)
         self._wizard.all_granted.connect(self._on_permissions_changed)
         self._perm_timer = QTimer(self)
         self._perm_timer.timeout.connect(self._on_permissions_changed)
@@ -117,7 +121,12 @@ class SigTouchApp(QObject):
             self._injector = Injector()
         if self._hotkey_listener is None and \
                 perms.check(PermissionKind.INPUT_MONITORING):
-            self._setup_hotkey()
+            if self._im_granted_at_start:
+                self._setup_hotkey()
+            else:
+                # 运行中才授予:不抢建 event tap——TCC 切换窗口内系统可能终止进程,
+                # 且 macOS 要求重启应用权限才真正生效
+                self._hotkey_needs_restart = True
 
     def _on_permissions_changed(self) -> None:
         self._ensure_capabilities()
@@ -249,6 +258,7 @@ class SigTouchApp(QObject):
         hotkey = format_hotkey(raw) if raw else ""
         self._tray.set_state(state, hotkey)
         self._settings_dlg.set_running_state(state)
+        self._overlay.set_topmost(state == "active")
 
     def _refresh_tray_state(self) -> None:
         self._apply_state(self._current_state())
@@ -291,12 +301,25 @@ class SigTouchApp(QObject):
             return
         # 预览窗被用户关掉后停发预览帧,省 CPU
         self._vision.set_preview(self._preview.isVisible())
-        if self._overlay.isVisible():
+        if self._ui_state == "active" and self._overlay.isVisible():
             self._overlay.raise_()  # 兜底:防止被后开窗口压住(macOS 另有原生层级)
         now = int(time.monotonic() * 1000)
         last = self._vision.last_frame_monotonic_ms
         if last and now - last > 5000:  # 5 秒无帧:管线卡死,重建
             self._restart_vision()
+
+    def _restart_app(self) -> None:
+        """重启自身(输入监控权限需重启生效)。拉起失败仅记录,不退出。"""
+        try:
+            if getattr(sys, "frozen", False):
+                cmd = [sys.executable]
+            else:
+                cmd = [sys.executable, "-m", "sigtouch"]
+            subprocess.Popen(cmd)
+        except Exception:
+            _log.warning("自动重启失败,请手动重启应用", exc_info=True)
+            return
+        self._quit()
 
     def _quit(self) -> None:
         self._watchdog.stop()

@@ -71,7 +71,7 @@ def test_degraded_start_never_constructs_injector(qapp, monkeypatch):
                              face_distance_m=0.6, face_present=False))
 
 
-def test_capabilities_activate_after_grant_without_restart(qapp, monkeypatch):
+def test_capabilities_activate_after_grant_hotkey_deferred(qapp, monkeypatch):
     state = {K.CAMERA: True, K.ACCESSIBILITY: False, K.INPUT_MONITORING: False}
     _patch_perms(monkeypatch, state)
     created = []
@@ -101,7 +101,8 @@ def test_capabilities_activate_after_grant_without_restart(qapp, monkeypatch):
     state[K.INPUT_MONITORING] = True
     a._on_permissions_changed()
     assert len(created) == 1                       # 注入器已构造
-    assert hotkey_calls == [1]                     # 快捷键已启动
+    assert hotkey_calls == []                      # 运行中授予:快捷键推迟到重启
+    assert a._hotkey_needs_restart is True
     assert a._perm_timer.isActive() is False       # 全就绪停轮询
 
 
@@ -322,3 +323,100 @@ def test_blank_hotkey_no_tray_suffix(qapp, monkeypatch):
     a._cfg.set("general/pause_hotkey", "")
     a._apply_state("active")
     assert calls[-1] == ("active", "")    # 空快捷键不带后缀
+
+
+def test_hotkey_started_when_granted_at_launch(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    calls = []
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey",
+                        lambda self: calls.append(1))
+    a = _make_app(monkeypatch)
+    assert calls == [1]                      # 启动即有权限 → 正常启动监听
+    assert a._hotkey_needs_restart is False
+
+
+def test_apply_state_gates_overlay_topmost(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    seen = []
+    monkeypatch.setattr(a._overlay, "set_topmost", lambda e: seen.append(e))
+    a._apply_state("active")
+    a._apply_state("paused")
+    a._apply_state("permission")
+    a._apply_state("error")
+    assert seen == [True, False, False, False]
+
+
+def test_watchdog_raise_only_when_active(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    raises = []
+    monkeypatch.setattr(a._overlay, "isVisible", lambda: True)
+    monkeypatch.setattr(a._overlay, "raise_", lambda: raises.append(1))
+    a._ui_state = "paused"
+    a._check_watchdog()
+    assert raises == []
+    a._ui_state = "active"
+    a._check_watchdog()
+    assert raises == [1]
+
+
+def test_restart_app_spawns_then_quits(qapp, monkeypatch):
+    state = {k: True for k in K}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(SigTouchApp, "_setup_hotkey", lambda self: None)
+    a = _make_app(monkeypatch)
+    spawned, quits = [], []
+    import subprocess
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd: spawned.append(cmd))
+    monkeypatch.setattr(a, "_quit", lambda: quits.append(1))
+    a._restart_app()
+    assert spawned and spawned[0][-2:] == ["-m", "sigtouch"]  # 非冻结命令形态
+    assert quits == [1]
+    # 拉起失败 → 不退出
+    def boom(cmd):
+        raise OSError("spawn failed")
+    monkeypatch.setattr(subprocess, "Popen", boom)
+    a._restart_app()
+    assert quits == [1]                       # 未再退出
