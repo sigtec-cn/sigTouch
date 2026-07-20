@@ -35,5 +35,6 @@ app = BUNDLE(
             "SigTouch 需要摄像头识别手势以控制鼠标和键盘。",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "12.0",
+        "LSUIElement": True,
     },
 )
