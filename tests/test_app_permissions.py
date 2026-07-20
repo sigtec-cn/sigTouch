@@ -420,3 +420,26 @@ def test_restart_app_spawns_then_quits(qapp, monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", boom)
     a._restart_app()
     assert quits == [1]                       # 未再退出
+
+
+def test_light_settings_cannot_bypass_hotkey_deferral(qapp, monkeypatch):
+    state = {K.CAMERA: True, K.ACCESSIBILITY: True, K.INPUT_MONITORING: False}
+    _patch_perms(monkeypatch, state)
+
+    class FakeInjector:
+        def __init__(self):
+            pass
+
+        def release_all(self):
+            pass
+
+    monkeypatch.setattr(app_module, "Injector", FakeInjector)
+    monkeypatch.setattr(
+        "sigtouch.platformsupport.autostart.set_autostart", lambda *_: None)
+    a = _make_app(monkeypatch)          # 启动时无 IM 权限(未 stub _setup_hotkey——测真实守卫)
+    state[K.INPUT_MONITORING] = True     # 运行中授予
+    a._on_permissions_changed()
+    assert a._hotkey_needs_restart is True
+    listeners_before = a._hotkey_listener
+    a._apply_light_settings()            # 普通设置改动不得建监听器
+    assert a._hotkey_listener is listeners_before is None

@@ -180,6 +180,8 @@ class SigTouchApp(QObject):
         self._start_vision()
 
     def _setup_hotkey(self) -> None:
+        if self._hotkey_needs_restart:
+            return  # 运行中才授予的输入监控:任何路径都不建 event tap,重启后生效
         if self._hotkey_listener is not None:
             self._hotkey_listener.stop()
             self._hotkey_listener = None
