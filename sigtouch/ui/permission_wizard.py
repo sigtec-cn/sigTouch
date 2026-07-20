@@ -19,14 +19,16 @@ _CLOSE_DELAY_MS = 2000
 
 class PermissionWizard(QDialog):
     all_granted = Signal()
+    restart_requested = Signal()
 
-    def __init__(self, checker=None, requester=None, opener=None, parent=None):
+    def __init__(self, checker=None, requester=None, opener=None, restart_hint=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("SigTouch 权限设置")
         self.setFixedWidth(520)
         self._checker = checker
         self._requester = requester
         self._opener = opener
+        self._restart_hint = restart_hint
         self._was_all_granted = False
         self._status_labels: dict[PermissionKind, QLabel] = {}
         self._request_buttons: dict[PermissionKind, QPushButton] = {}
@@ -79,6 +81,19 @@ class PermissionWizard(QDialog):
             self._open_buttons[kind] = opn
             grid.addWidget(opn, 0, 4, 2, 1)
             layout.addWidget(card)
+        self._restart_row = QFrame()
+        self._restart_row.setProperty("class", "card")
+        rl = QHBoxLayout(self._restart_row)
+        rl.setContentsMargins(14, 8, 14, 8)
+        warn = QLabel("⚠️ 快捷键需重启应用后生效")
+        rl.addWidget(warn)
+        rl.addStretch(1)
+        self._restart_button = QPushButton("重启应用")
+        self._restart_button.setProperty("class", "primary")
+        self._restart_button.clicked.connect(self.restart_requested)
+        rl.addWidget(self._restart_button)
+        self._restart_row.setVisible(False)
+        layout.addWidget(self._restart_row)
         layout.addStretch(1)
 
         self._timer = QTimer(self)
@@ -111,6 +126,8 @@ class PermissionWizard(QDialog):
             self.all_granted.emit()
             QTimer.singleShot(_CLOSE_DELAY_MS, self.close)
         self._was_all_granted = granted
+        needs_restart = bool(self._restart_hint()) if self._restart_hint else False
+        self._restart_row.setVisible(needs_restart)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

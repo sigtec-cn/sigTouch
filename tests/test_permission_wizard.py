@@ -63,6 +63,34 @@ def test_poll_timer_stops_when_granted_or_hidden(qapp):
     assert w._timer.isActive() is False         # 隐藏 → 停
 
 
+def test_restart_hint_row_and_signal(qapp):
+    from sigtouch.ui.permission_wizard import PermissionWizard
+    state = {K.CAMERA: True, K.ACCESSIBILITY: True, K.INPUT_MONITORING: True}
+    flag = {"v": False}
+    w = PermissionWizard(checker=lambda: dict(state),
+                         requester=lambda k: None, opener=lambda k: None,
+                         restart_hint=lambda: flag["v"])
+    assert w._restart_row.isVisibleTo(w) is False   # 默认隐藏
+    flag["v"] = True
+    w.refresh()
+    assert w._restart_row.isVisibleTo(w) is True    # 提示出现
+    got = []
+    w.restart_requested.connect(lambda: got.append(1))
+    w._restart_button.click()
+    assert got == [1]
+    flag["v"] = False
+    w.refresh()
+    assert w._restart_row.isVisibleTo(w) is False
+
+
+def test_wizard_without_restart_hint_backward_compatible(qapp):
+    from sigtouch.ui.permission_wizard import PermissionWizard
+    w = PermissionWizard(checker=lambda: {k: True for k in K},
+                         requester=lambda k: None, opener=lambda k: None)
+    w.refresh()
+    assert w._restart_row.isVisibleTo(w) is False   # 无 hint 恒隐藏
+
+
 def test_tray_permission_state_and_menu(qapp):
     from sigtouch.ui.tray import TrayController
     t = TrayController()
