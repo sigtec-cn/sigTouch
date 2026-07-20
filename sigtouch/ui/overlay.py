@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QWidget
 from sigtouch.config import Config
 from sigtouch.interaction.features import INDEX_TIP
 from sigtouch.perception.types import HandFrame
-from sigtouch.ui.native import pin_window_topmost
+from sigtouch.ui.native import pin_window_topmost, unpin_window_topmost
 
 _FINGER_CHAINS = [
     [0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [5, 9, 10, 11, 12],
@@ -71,6 +71,7 @@ class OverlayWindow(QWidget):
         self._cfg = cfg
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self._topmost = False
         self._hand: HandFrame | None = None
         self._scale = 1.0
         self._feedback: str | None = None
@@ -104,6 +105,18 @@ class OverlayWindow(QWidget):
         self._feedback_frames = 0
         self._cursor_px = None
         self.update()
+
+    def set_topmost(self, enabled: bool) -> None:
+        """启动态置顶显示;非启动态降层并隐藏,彻底不干扰其他窗口。幂等。"""
+        if enabled == self._topmost:
+            return
+        self._topmost = enabled
+        if enabled:
+            self.show()
+            pin_window_topmost(self)
+        else:
+            unpin_window_topmost(self)
+            self.hide()
 
     def paintEvent(self, event) -> None:
         if self._hand is None:

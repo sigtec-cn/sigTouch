@@ -9,6 +9,7 @@ _log = logging.getLogger(__name__)
 _CAN_JOIN_ALL_SPACES = 1 << 0
 _STATIONARY = 1 << 4
 _FULLSCREEN_AUXILIARY = 1 << 8
+_NORMAL_LEVEL = 0  # NSNormalWindowLevel
 _SCREEN_SAVER_LEVEL = 1000  # NSScreenSaverWindowLevel:高于全屏窗口层
 
 
@@ -38,3 +39,30 @@ def pin_window_topmost(widget) -> None:
             _CAN_JOIN_ALL_SPACES | _STATIONARY | _FULLSCREEN_AUXILIARY)
     except Exception:
         _log.warning("原生置顶设置失败,回退 Qt 置顶", exc_info=True)
+
+
+def unpin_window_topmost(widget) -> None:
+    """把窗口降回普通层级(与 pin_window_topmost 对称)。仅 macOS 有实际动作。"""
+    if sys.platform != "darwin":
+        return
+    try:
+        from PySide6.QtGui import QGuiApplication
+
+        # winId() 只有在真正的 Cocoa QPA 插件下才是有效 NSView 指针;
+        # offscreen/minimal 等测试用平台会返回占位句柄,直接喂给 objc 桥接
+        # 会解引用野指针导致 segfault(Python 异常捕获不到原生崩溃),
+        # 因此在进入 objc 桥接前先确认当前确实跑在 cocoa 平台上。
+        if QGuiApplication.platformName() != "cocoa":
+            return
+
+        import objc  # pyobjc-framework-Cocoa
+        from ctypes import c_void_p
+
+        ns_view = objc.objc_object(c_void_p=c_void_p(int(widget.winId())))
+        ns_window = ns_view.window()
+        if ns_window is None:
+            return
+        ns_window.setLevel_(_NORMAL_LEVEL)
+        ns_window.setCollectionBehavior_(0)
+    except Exception:
+        _log.warning("恢复普通窗口层级失败,保持当前层级", exc_info=True)
