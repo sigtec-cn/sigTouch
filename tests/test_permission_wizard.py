@@ -109,6 +109,25 @@ def test_wizard_stays_open_when_restart_needed(qapp, monkeypatch):
     assert shots and shots[-1] == 2000      # 构造时 refresh 触发关闭调度
 
 
+def test_restart_flag_set_by_emit_still_suppresses_close(qapp, monkeypatch):
+    from PySide6.QtCore import QTimer
+    from sigtouch.ui.permission_wizard import PermissionWizard
+    shots = []
+    monkeypatch.setattr(QTimer, "singleShot",
+                        staticmethod(lambda ms, fn: shots.append(ms)))
+    state = {K.CAMERA: True, K.ACCESSIBILITY: True, K.INPUT_MONITORING: False}
+    flag = {"v": False}
+    w = PermissionWizard(checker=lambda: dict(state),
+                         requester=lambda k: None, opener=lambda k: None,
+                         restart_hint=lambda: flag["v"])
+    w.all_granted.connect(lambda: flag.update(v=True))  # 模拟 app:emit 同步置位
+    assert shots == []                                   # 构造时未全就绪,无调度
+    state[K.INPUT_MONITORING] = True
+    w.refresh()                                          # 升沿:emit 置位标志
+    assert w._restart_row.isVisibleTo(w) is True         # emit 后重取值 → 行可见
+    assert shots == []                                   # 不自动关闭
+
+
 def test_tray_permission_state_and_menu(qapp):
     from sigtouch.ui.tray import TrayController
     t = TrayController()

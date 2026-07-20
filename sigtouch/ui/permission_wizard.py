@@ -126,6 +126,9 @@ class PermissionWizard(QDialog):
             self._timer.stop()
         if granted and not self._was_all_granted:
             self.all_granted.emit()
+            # emit 可能同步置位 needs-restart 标志(app 端 _ensure_capabilities),重新取值
+            needs_restart = bool(self._restart_hint()) if self._restart_hint else False
+            self._restart_row.setVisible(needs_restart)
             if not needs_restart:
                 QTimer.singleShot(_CLOSE_DELAY_MS, self.close)
         self._was_all_granted = granted
