@@ -82,8 +82,10 @@ class OverlayWindow(QWidget):
         screens = QGuiApplication.screens()
         idx = target_screen_index(self._cfg, screens)
         self.setGeometry(screens[idx].geometry())
-        self.show()
-        pin_window_topmost(self)
+        if self._topmost:
+            self.show()
+            pin_window_topmost(self)
+        # 非置顶态保持隐藏,显隐统一由 set_topmost 驱动
 
     def update_hand(self, hand: HandFrame, scale: float,
                     feedback: str | None, cursor_px=None) -> None:

@@ -40,3 +40,17 @@ def test_unpin_fails_open_on_error(monkeypatch, qapp):
     monkeypatch.setattr(native.sys, "platform", "darwin")
     # offscreen 平台名非 cocoa → 门控直接返回,不触碰 objc,不抛
     native.unpin_window_topmost(object())
+
+
+def test_apply_screen_respects_topmost_flag(qapp, monkeypatch):
+    import sigtouch.ui.overlay as ov
+    pins = []
+    monkeypatch.setattr(ov, "pin_window_topmost", lambda w: pins.append(1))
+    monkeypatch.setattr(ov, "unpin_window_topmost", lambda w: None)
+    w = ov.OverlayWindow(Config(backend={}))
+    w.apply_screen()
+    assert not w.isVisible() and pins == []   # 非置顶态:仅设几何,不显示不 pin
+    w.set_topmost(True)
+    pins.clear()
+    w.apply_screen()
+    assert w.isVisible() and pins == [1]      # 置顶态:重申 show+pin(换显示器场景)
