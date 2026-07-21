@@ -41,13 +41,21 @@ def test_bottom_edge_shrinks_into_screen():
     assert max(p[1] for p in out) <= H + 1e-6                  # 收进屏幕
 
 
-def test_min_shrink_floor_keeps_hand_visible():
-    # 锚点贴最底边:任何收缩都无法完全收进 → 触及下限 0.5,但仍可见
-    pts = _tall_hand(anchor_xy=(960.0, 1079.0), height=540.0)
+def test_min_shrink_floors_size_term_away_from_edges():
+    # 远离边缘的超大手:尺寸项被下限约束(不会缩到 0.25 目标以下的一半)
+    pts = _tall_hand(anchor_xy=(960.0, 50.0), height=1200.0)  # k_size=270/1200=0.225 < 0.5
     out = fit_hand_to_screen(pts, ANCHOR, W, H, 0.25, min_shrink=0.5)
     span = max(p[1] for p in out) - min(p[1] for p in out)
-    assert span > 0                                    # 未塌缩
-    assert span >= (H * 0.25) * 0.5 - 1e-6             # 不低于 尺寸限制×下限
+    # 尺寸项被 floor 在 0.5,底部=50+600=650<1080,边缘未约束
+    assert span == pytest.approx(600.0)
+
+
+def test_edge_containment_beats_min_shrink():
+    # 超大手贴底边:边缘收容压过下限,完全收进屏幕(可塌缩,食指尖仍在光标上)
+    pts = _tall_hand(anchor_xy=(960.0, 1079.0), height=540.0)
+    out = fit_hand_to_screen(pts, ANCHOR, W, H, 0.25, min_shrink=0.5)
+    assert max(p[1] for p in out) <= H + 1e-6    # 不出界(此前会溢出 269px)
+    assert out[ANCHOR] == pts[ANCHOR]            # 锚点不动
 
 
 def test_degenerate_inputs_do_not_raise():

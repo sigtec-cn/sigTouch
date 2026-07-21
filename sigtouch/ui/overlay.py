@@ -46,11 +46,7 @@ def fit_hand_to_screen(points, anchor_idx, screen_w, screen_h,
 
     anchor 点位置恒不变——光标始终钉在食指上(v1.2 契约)。
 
-    min_shrink 仅在"尺寸上限"本身已经在收缩手影时(bbox_h > limit)才生效,
-    用来防止贴角场景下的二次收缩把手影压成不可见的一个点。若手影本来就
-    没超出尺寸上限,则完全按边缘收进屏幕计算,不受 min_shrink 下限约束——
-    否则贴近屏幕边缘的正常大小手影会被下限强行推出屏幕外,违背"尽量收进
-    屏幕"的目标。
+    min_shrink 仅约束尺寸收缩项;边缘收容始终优先(不裁切 > 不塌缩,食指尖恒在光标上)。
     """
     if len(points) < 2:
         return points
@@ -60,12 +56,12 @@ def fit_hand_to_screen(points, anchor_idx, screen_w, screen_h,
     if bbox_h <= 0:
         return points
 
-    # (a) 尺寸上限
+    # (a) 尺寸上限 —— 下限只约束这一项
     limit = screen_h * max_h_fraction
-    size_constrained = bbox_h > limit
-    k = limit / bbox_h if size_constrained else 1.0
+    k = limit / bbox_h if bbox_h > limit else 1.0
+    k = max(min_shrink, k)
 
-    # (b) 边缘收缩:令 anchor + k·offset 落在屏幕矩形内
+    # (b) 边缘收容:始终优先,可将 k 压到下限之下
     for x, y in points:
         dx, dy = x - ax, y - ay
         if dx > 0:
@@ -77,8 +73,6 @@ def fit_hand_to_screen(points, anchor_idx, screen_w, screen_h,
         elif dy < 0:
             k = min(k, -ay / dy)
 
-    if size_constrained:
-        k = max(min_shrink, k)
     k = min(1.0, k)
     if k >= 1.0:
         return points
