@@ -297,6 +297,12 @@ class SettingsDialog(QDialog):
                                lambda s: round(float(s) * 100),
                                lambda v: f"{v}%"),
                   "物理模型算完后的整体微调,大屏看不清就调大")
+        self._row(form, "手影最大高度",
+                  self._slider("display/hand_max_screen_fraction", 10, 60,
+                               lambda v: v / 100.0,
+                               lambda s: round(float(s) * 100),
+                               lambda v: f"{v}%"),
+                  "手影高度上限,占屏幕高度的比例;超过时自动收缩并收进屏幕")
         self._row(form, "目标显示器", self._monitor_combo("display/monitor"), "")
         return page
 

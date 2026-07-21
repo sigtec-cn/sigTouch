@@ -110,3 +110,11 @@ def test_scale_keys_are_light_and_instant(qapp):
     assert dlg._cfg.get("display/hand_scale_multiplier") == pytest.approx(2.0)
     assert dlg._apply_timer.isActive() is True     # 轻量合并
     assert dlg._restart_timer.isActive() is False  # 不触发视觉重启
+
+
+def test_hand_max_fraction_is_light_key(qapp):
+    dlg = _dlg(qapp)
+    dlg.field_widget("display/hand_max_screen_fraction").setValue(40)
+    assert dlg._cfg.get("display/hand_max_screen_fraction") == pytest.approx(0.40)
+    assert dlg._apply_timer.isActive() is True      # 轻量合并
+    assert dlg._restart_timer.isActive() is False   # 不重启视觉线程
