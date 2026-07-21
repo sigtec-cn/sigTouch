@@ -73,7 +73,7 @@ def fit_hand_to_screen(points, anchor_idx, screen_w, screen_h,
         elif dy < 0:
             k = min(k, -ay / dy)
 
-    k = min(1.0, k)
+    k = max(0.0, min(1.0, k))  # 锚点理论上恒在屏内,防御未来调用方
     if k >= 1.0:
         return points
     return [(ax + (x - ax) * k, ay + (y - ay) * k) for x, y in points]

@@ -53,7 +53,7 @@
 | 物理模型 | **保留**(距离变化时手影稳定是好特性),钳制作为其上限 |
 | 兼容 | `overlay_scale` 不改;钳制在 overlay 渲染层,新增纯函数 |
 
-**已知取舍**:光标位于屏幕极端角落且收缩已达下限 0.5 时,手掌仍可能小幅出界。此时食指尖(操作焦点)始终可见,不影响功能。
+**已知取舍**:光标位于屏幕极端角落且收缩已达下限 0.5 时,手影可能收缩为小块(不裁切优先于不塌缩;食指尖恒在光标上,仅描边圆头可能超出 ≤ 半个掌宽)。此时食指尖(操作焦点)始终可见,不影响功能。
 
 ## 3. 实现设计
 
@@ -69,7 +69,7 @@ def fit_hand_to_screen(points, anchor_idx, screen_w, screen_h,
     """
 ```
 
-- 收缩系数 `k = clamp(min(k_size, k_bounds), min_shrink, 1.0)`;
+- 收缩系数 `k = min(1.0, min(k_bounds, max(min_shrink, k_size)))  # 下限只约束尺寸项;边缘收容始终优先`;
   - `k_size = (screen_h × max_h_fraction) / bbox_h`(bbox_h ≤ 限制时为 1.0);
   - `k_bounds`:对每个点,令 anchor + k·offset 落在 `[0,W]×[0,H]`,取所有约束的最小上界;
 - 点变换:`p' = anchor + k × (p - anchor)`;
@@ -99,8 +99,8 @@ def fit_hand_to_screen(points, anchor_idx, screen_w, screen_h,
 - `fit_hand_to_screen`:
   - 尺寸钳制:超高点集被收缩到恰好 `max_h_fraction`;未超高的点集原样返回;
   - anchor 不变量:任意输入下 `out[anchor_idx] == points[anchor_idx]`;
-  - 边缘收缩:光标在底部/角落时,收缩后 bbox 落入屏幕(除非触及 `min_shrink` 下限);
-  - 下限保护:极端角落时 `k` 不低于 `min_shrink`,手影不塌缩;
+  - 边缘收缩:光标在底部/角落时,收缩后 bbox 落入屏幕(下限只作用于尺寸项;边缘冲突时收容获胜);
+  - 下限保护:极端角落时尺寸项不低于 `min_shrink`,手影不过度塌缩;
   - 退化输入:零高度 bbox、单点集合不抛异常。
 - 回归:用户实际配置(1920×1080、scale 对应 48% 屏高)经 fit 后 ≤ 25%;`align_to_cursor` 既有测试不变。
 - 设置:新键即时生效、不触发视觉线程重启。

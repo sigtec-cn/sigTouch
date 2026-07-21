@@ -63,3 +63,10 @@ def test_degenerate_inputs_do_not_raise():
     assert fit_hand_to_screen(flat, ANCHOR, W, H, 0.25) == flat
     single = [(5.0, 5.0)]
     assert fit_hand_to_screen(single, 0, W, H, 0.25) == single
+
+
+def test_anchor_preserved_without_cursor_fallback():
+    # cursor_px=None 路径以点 0(腕)为锚:仅尺寸钳制,锚点不动
+    pts = _tall_hand(anchor_xy=(960.0, 300.0), height=800.0)
+    out = fit_hand_to_screen(pts, 0, W, H, 0.25)
+    assert out[0] == pts[0]
