@@ -40,6 +40,51 @@ def align_to_cursor(points, index_tip_idx, cursor_px):
     return [(x + dx, y + dy) for x, y in points]
 
 
+def fit_hand_to_screen(points, anchor_idx, screen_w, screen_h,
+                       max_h_fraction, min_shrink=0.5):
+    """围绕 anchor(食指尖)收缩手影:限制高度占屏比例,并尽量收进屏幕。
+
+    anchor 点位置恒不变——光标始终钉在食指上(v1.2 契约)。
+
+    min_shrink 仅在"尺寸上限"本身已经在收缩手影时(bbox_h > limit)才生效,
+    用来防止贴角场景下的二次收缩把手影压成不可见的一个点。若手影本来就
+    没超出尺寸上限,则完全按边缘收进屏幕计算,不受 min_shrink 下限约束——
+    否则贴近屏幕边缘的正常大小手影会被下限强行推出屏幕外,违背"尽量收进
+    屏幕"的目标。
+    """
+    if len(points) < 2:
+        return points
+    ax, ay = points[anchor_idx]
+    ys = [p[1] for p in points]
+    bbox_h = max(ys) - min(ys)
+    if bbox_h <= 0:
+        return points
+
+    # (a) 尺寸上限
+    limit = screen_h * max_h_fraction
+    size_constrained = bbox_h > limit
+    k = limit / bbox_h if size_constrained else 1.0
+
+    # (b) 边缘收缩:令 anchor + k·offset 落在屏幕矩形内
+    for x, y in points:
+        dx, dy = x - ax, y - ay
+        if dx > 0:
+            k = min(k, (screen_w - ax) / dx)
+        elif dx < 0:
+            k = min(k, -ax / dx)
+        if dy > 0:
+            k = min(k, (screen_h - ay) / dy)
+        elif dy < 0:
+            k = min(k, -ay / dy)
+
+    if size_constrained:
+        k = max(min_shrink, k)
+    k = min(1.0, k)
+    if k >= 1.0:
+        return points
+    return [(ax + (x - ax) * k, ay + (y - ay) * k) for x, y in points]
+
+
 def silhouette_path(points, palm_size_px):
     """把 21 个像素点合成实心手形(影子剪影):五指链粗圆描边 ∪ 掌心多边形。"""
     stroker = QPainterPathStroker()
@@ -129,6 +174,10 @@ class OverlayWindow(QWidget):
                             self._scale)
         if self._cursor_px is not None:
             pts = align_to_cursor(pts, INDEX_TIP, self._cursor_px)
+        anchor_idx = INDEX_TIP if self._cursor_px is not None else 0
+        pts = fit_hand_to_screen(
+            pts, anchor_idx, self.width(), self.height(),
+            self._cfg.get("display/hand_max_screen_fraction"))
         palm_px = math.dist(pts[0], pts[9])
         color = QColor(self._cfg.get("display/overlay_color"))
         color.setAlphaF(min(1.0, self._cfg.get("display/overlay_opacity")))

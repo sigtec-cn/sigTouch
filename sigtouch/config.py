@@ -26,6 +26,7 @@ DEFAULTS: dict[str, Any] = {
     "display/monitor": 0,
     "display/camera_screen_offset_m": 0.0,  # 摄像头到屏幕平面距离(米,摄像头在屏前为正)
     "display/hand_scale_multiplier": 1.0,   # 手影大小倍率(物理模型后的用户微调)
+    "display/hand_max_screen_fraction": 0.25,  # 手影高度上限(占屏幕高度比例)
     "gestures/left_click": True,
     "gestures/right_click": True,
     "gestures/scroll": True,
