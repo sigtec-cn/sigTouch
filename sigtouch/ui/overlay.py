@@ -112,6 +112,22 @@ def _stroke_path(path, width: float):
     return stroker.createStroke(outline)
 
 
+# ---- 进度环几何常量(逻辑像素,不随 scale/palm_px 缩放) ----
+_RING_RADIUS = 22.0
+_RING_STROKE = 3.0
+_GLYPH_SIZE = 18.0
+
+
+def progress_geometry(cursor_px):
+    """进度环几何:圆心恒等于光标像素坐标,半径恒为 _RING_RADIUS。
+
+    cursor_px 为 None(无光标锚点)时返回 (None, 0.0),绘制层据此跳过进度绘制。
+    """
+    if cursor_px is None:
+        return None, 0.0
+    return (cursor_px[0], cursor_px[1]), _RING_RADIUS
+
+
 # ---- 手势图标(单位坐标 -1..1 的折线笔画像;绘制时按尺寸缩放) ----
 # 每个图标 = 若干"笔",每笔为折线点列表。描画顺序 = 笔顺序 + 笔内点顺序。
 
@@ -120,12 +136,11 @@ _ENTER_STROKES = [
     [(0.75, -0.70), (0.75, 0.25), (-0.15, 0.25), (-0.70, 0.25)],   # 主干(尾→头)
     [(-0.42, -0.02), (-0.70, 0.25), (-0.42, 0.52)],                # 箭头两翼
 ]
-# 退格:第一笔=左向箭杆+两翼,第二、三笔=×(最后补)
+# 退格:单一左箭头 ←,第一笔=箭杆,第二、三笔=箭头两翼
 _BACKSPACE_STROKES = [
-    [(0.70, 0.0), (-0.45, 0.0)],                                   # 箭杆
-    [(-0.20, -0.25), (-0.45, 0.0), (-0.20, 0.25)],                 # 箭头两翼
-    [(0.15, -0.18), (0.51, 0.18)],                                 # × 主斜
-    [(0.51, -0.18), (0.15, 0.18)],                                 # × 副斜
+    [(0.8, 0.0), (-0.8, 0.0)],                                     # 箭杆
+    [(-0.8, 0.0), (-0.2, -0.5)],                                   # 箭头上翼
+    [(-0.8, 0.0), (-0.2, 0.5)],                                    # 箭头下翼
 ]
 _GESTURE_ICONS = {
     "enter": _ENTER_STROKES,
@@ -264,68 +279,79 @@ class OverlayWindow(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.fillPath(sil, color)
 
-        # 手势进度与触发闪烁(光标周围)
-        self._paint_progress(p, palm_px)
+        # 手势进度与触发闪烁(光标周围,固定几何,不随 scale/palm 缩放)
+        self._paint_progress(p)
         p.end()
 
     # ---- 手势进度渲染 ----
-    def _paint_progress(self, p: QPainter, palm_px: float) -> None:
+    def _paint_progress(self, p: QPainter) -> None:
+        center, radius = progress_geometry(self._cursor_px)
+        if center is None:
+            return
+        cx, cy = center
         flashing = self._now_ns() < self._flash_until
         prog = self._progress
         if prog is None and not flashing:
             return
-        # 进度图标锚点:光标右上方偏移,尺寸随手掌缩放
-        cx, cy = (self._cursor_px if self._cursor_px is not None else (0, 0))
-        ox, oy = cx + max(28.0, palm_px * 0.5), cy - max(28.0, palm_px * 0.5)
-        size = max(14.0, palm_px * 0.32) * self._scale
-        accent = QColor(20, 184, 166)          # 主题青
-        white = QColor(255, 255, 255)
 
         if prog is not None:
+            self._paint_ring(p, cx, cy, radius, prog.fraction)
             kind = prog.kind
-            frac = prog.fraction
-            if kind in ("left_click", "right_click"):
-                self._paint_ring(p, ox, oy, size, frac, accent, white)
+            if kind == "right_click":
+                self._paint_right_click_dot(p, cx, cy, radius)
             elif kind in _GESTURE_ICONS:
-                # 图标描画:淡色底稿 + 按 fraction 高亮填充
-                ghost = QColor(white)
-                ghost.setAlphaF(0.18)
-                _draw_strokes_partial(p, _GESTURE_ICONS[kind], 1.0,
-                                      ox, oy, size, size * 0.22, ghost)
-                fill = QColor(accent)
-                fill.setAlphaF(0.95)
-                _draw_strokes_partial(p, _GESTURE_ICONS[kind], frac,
-                                      ox, oy, size, size * 0.22, fill)
+                white = QColor(255, 255, 255)
+                white.setAlphaF(242 / 255)
+                _draw_strokes_partial(p, _GESTURE_ICONS[kind], prog.fraction,
+                                      cx, cy, _GLYPH_SIZE, 2.0, white)
 
         if flashing:
-            # 触发闪烁:图标位置画一个瞬时高亮圆环放大脉冲
-            ring = QRectF(ox - size, oy - size, size * 2, size * 2)
-            flash_c = QColor(white)
-            flash_c.setAlphaF(0.85)
-            pen = QPen(flash_c)
-            pen.setWidthF(max(2.0, size * 0.18))
-            p.setPen(pen)
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(ring)
+            self._paint_fire_flash(p, cx, cy)
 
-    def _paint_ring(self, p: QPainter, cx: float, cy: float, size: float,
-                    frac: float, accent: QColor, white: QColor) -> None:
-        """捏合点击:光标周围半透明整圆 + 扇形自顶部顺时针逐步填充。"""
-        rect = QRectF(cx - size, cy - size, size * 2, size * 2)
-        # 底圈(半透明整圆)
-        base = QColor(white)
-        base.setAlphaF(0.16)
-        pen = QPen(base)
-        pen.setWidthF(max(2.0, size * 0.16))
+    def _paint_ring(self, p: QPainter, cx: float, cy: float, radius: float,
+                    frac: float) -> None:
+        """轨道整圆(zinc 半透明)+ 进度弧(白,自 12 点顺时针,圆头端帽)。"""
+        rect = QRectF(cx - radius, cy - radius, radius * 2, radius * 2)
+        track = QColor(24, 24, 27)
+        track.setAlphaF(64 / 255)
+        pen = QPen(track)
+        pen.setWidthF(_RING_STROKE)
         p.setPen(pen)
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawEllipse(rect)
-        # 扇形进度(从 12 点顺时针,单位 1/16 度)
-        fill = QColor(accent)
-        fill.setAlphaF(0.9)
-        pen2 = QPen(fill)
-        pen2.setWidthF(max(2.0, size * 0.16))
-        p.setPen(pen2)
-        start = 90 * 16
-        span = int(-360 * 16 * max(0.0, min(1.0, frac)))
-        p.drawArc(rect, start, span)
+
+        if frac > 0.0:
+            arc_c = QColor(255, 255, 255)
+            arc_c.setAlphaF(242 / 255)
+            pen2 = QPen(arc_c)
+            pen2.setWidthF(_RING_STROKE)
+            pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen2)
+            start = 90 * 16
+            span = int(-360 * 16 * max(0.0, min(1.0, frac)))
+            p.drawArc(rect, start, span)
+
+    def _paint_right_click_dot(self, p: QPainter, cx: float, cy: float,
+                               radius: float) -> None:
+        """右键标识:环外 4 点方向的 3px 白点。"""
+        angle = math.radians(120)              # 4 o'clock: 12 点顺时针 120°
+        dx, dy = math.sin(angle), -math.cos(angle)
+        dist = radius + 5.0
+        dot_c = QColor(255, 255, 255)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(dot_c)
+        p.drawEllipse(QPointF(cx + dx * dist, cy + dy * dist), 1.5, 1.5)
+
+    def _paint_fire_flash(self, p: QPainter, cx: float, cy: float) -> None:
+        """触发闪烁:环从 _RING_RADIUS 扩散到 +8px,alpha 在 160ms 内衰减到 0。"""
+        remaining = max(0, self._flash_until - self._now_ns())
+        t = 1.0 - min(1.0, remaining / 160_000_000)
+        r = _RING_RADIUS + 8.0 * t
+        flash_c = QColor(255, 255, 255)
+        flash_c.setAlphaF((242 / 255) * (1.0 - t))
+        pen = QPen(flash_c)
+        pen.setWidthF(_RING_STROKE)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        rect = QRectF(cx - r, cy - r, r * 2, r * 2)
+        p.drawEllipse(rect)
