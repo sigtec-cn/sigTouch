@@ -1,14 +1,15 @@
-"""全屏透明点击穿透覆盖层:Oculus 风格半透明手部轮廓 + 手势反馈图标。"""
+"""全屏透明点击穿透覆盖层:Oculus 风格半透明手部轮廓 + 手势进度/反馈图标。"""
 import math
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import (QColor, QFont, QGuiApplication, QPainter,
-                           QPainterPath, QPainterPathStroker, QPolygonF)
+                           QPainterPath, QPainterPathStroker, QPen, QPolygonF)
 from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import QWidget
 
 from sigtouch.config import Config
 from sigtouch.interaction.features import INDEX_TIP
+from sigtouch.interaction.gestures import GestureProgress
 from sigtouch.perception.types import HandFrame
 from sigtouch.ui.native import pin_window_topmost, unpin_window_topmost
 
@@ -111,6 +112,61 @@ def _stroke_path(path, width: float):
     return stroker.createStroke(outline)
 
 
+# ---- 手势图标(单位坐标 -1..1 的折线笔画像;绘制时按尺寸缩放) ----
+# 每个图标 = 若干"笔",每笔为折线点列表。描画顺序 = 笔顺序 + 笔内点顺序。
+
+# 回车箭头 ↵:第一笔=主干(尾→折角→箭头根),第二笔=箭头两翼
+_ENTER_STROKES = [
+    [(0.75, -0.70), (0.75, 0.25), (-0.15, 0.25), (-0.70, 0.25)],   # 主干(尾→头)
+    [(-0.42, -0.02), (-0.70, 0.25), (-0.42, 0.52)],                # 箭头两翼
+]
+# 退格:第一笔=左向箭杆+两翼,第二、三笔=×(最后补)
+_BACKSPACE_STROKES = [
+    [(0.70, 0.0), (-0.45, 0.0)],                                   # 箭杆
+    [(-0.20, -0.25), (-0.45, 0.0), (-0.20, 0.25)],                 # 箭头两翼
+    [(0.15, -0.18), (0.51, 0.18)],                                 # × 主斜
+    [(0.51, -0.18), (0.15, 0.18)],                                 # × 副斜
+]
+_GESTURE_ICONS = {
+    "enter": _ENTER_STROKES,
+    "backspace": _BACKSPACE_STROKES,
+}
+
+
+def _strokes_total_length(strokes) -> float:
+    return sum(math.dist(a, b) for pts in strokes
+               for a, b in zip(pts, pts[1:]))
+
+
+def _draw_strokes_partial(p: QPainter, strokes, fraction: float,
+                          cx: float, cy: float, size: float,
+                          width: float, color: QColor) -> None:
+    """按 fraction 沿描画顺序部分绘制多笔折线(图标的"逐步填充"进度)。"""
+    total = _strokes_total_length(strokes)
+    if total <= 0:
+        return
+    budget = total * max(0.0, min(1.0, fraction))
+    pen = QPen(color)
+    pen.setWidthF(width)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    for pts in strokes:
+        for a, b in zip(pts, pts[1:]):
+            L = math.dist(a, b)
+            if L <= 0:
+                continue
+            if budget <= 0:
+                return
+            r = 1.0 if budget >= L else budget / L
+            ax, ay = cx + a[0] * size, cy + a[1] * size
+            bx, by = cx + (a[0] + (b[0] - a[0]) * r) * size, \
+                     cy + (a[1] + (b[1] - a[1]) * r) * size
+            p.drawLine(QPointF(ax, ay), QPointF(bx, by))
+            budget -= L
+
+
 class OverlayWindow(QWidget):
     def __init__(self, cfg: Config):
         super().__init__(None, Qt.WindowType.FramelessWindowHint
@@ -124,8 +180,8 @@ class OverlayWindow(QWidget):
         self._topmost = False
         self._hand: HandFrame | None = None
         self._scale = 1.0
-        self._feedback: str | None = None
-        self._feedback_frames = 0
+        self._progress: GestureProgress | None = None
+        self._flash_until = 0          # 触发闪烁截止(monotonic ns)
         self._cursor_px = None
 
     def apply_screen(self) -> None:
@@ -138,25 +194,29 @@ class OverlayWindow(QWidget):
         # 非置顶态保持隐藏,显隐统一由 set_topmost 驱动
 
     def update_hand(self, hand: HandFrame, scale: float,
-                    feedback: str | None, cursor_px=None) -> None:
+                    progress: GestureProgress | None, cursor_px=None) -> None:
         self._hand = hand
         self._scale = scale
         self._cursor_px = cursor_px
-        if feedback:                     # 反馈图标保持约 0.5s(15 帧)
-            self._feedback = feedback
-            self._feedback_frames = 15
-        elif self._feedback_frames > 0:
-            self._feedback_frames -= 1
-            if self._feedback_frames == 0:
-                self._feedback = None
+        if progress is not None and progress.fired:
+            # 触发帧:记录闪烁窗口(~160ms),进度立即清空避免停留
+            self._flash_until = self._now_ns() + 160_000_000
+            self._progress = None
+        else:
+            self._progress = progress
         self.update()
 
     def clear(self) -> None:
         self._hand = None
-        self._feedback = None
-        self._feedback_frames = 0
+        self._progress = None
+        self._flash_until = 0
         self._cursor_px = None
         self.update()
+
+    @staticmethod
+    def _now_ns() -> int:
+        import time
+        return time.monotonic_ns()
 
     def set_topmost(self, enabled: bool) -> None:
         """启动态置顶显示;非启动态降层并隐藏,彻底不干扰其他窗口。幂等。"""
@@ -204,11 +264,68 @@ class OverlayWindow(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.fillPath(sil, color)
 
-        if self._feedback:
-            wrist = pts[0]
-            p.setFont(QFont("", int(28 * self._scale)))
-            p.setPen(QColor(0, 0, 0, 230))
-            p.drawText(QPointF(wrist[0] + 41, wrist[1] - 39), self._feedback)
-            p.setPen(QColor(255, 255, 255, 240))
-            p.drawText(QPointF(wrist[0] + 40, wrist[1] - 40), self._feedback)
+        # 手势进度与触发闪烁(光标周围)
+        self._paint_progress(p, palm_px)
         p.end()
+
+    # ---- 手势进度渲染 ----
+    def _paint_progress(self, p: QPainter, palm_px: float) -> None:
+        flashing = self._now_ns() < self._flash_until
+        prog = self._progress
+        if prog is None and not flashing:
+            return
+        # 进度图标锚点:光标右上方偏移,尺寸随手掌缩放
+        cx, cy = (self._cursor_px if self._cursor_px is not None else (0, 0))
+        ox, oy = cx + max(28.0, palm_px * 0.5), cy - max(28.0, palm_px * 0.5)
+        size = max(14.0, palm_px * 0.32) * self._scale
+        accent = QColor(20, 184, 166)          # 主题青
+        white = QColor(255, 255, 255)
+
+        if prog is not None:
+            kind = prog.kind
+            frac = prog.fraction
+            if kind in ("left_click", "right_click"):
+                self._paint_ring(p, ox, oy, size, frac, accent, white)
+            elif kind in _GESTURE_ICONS:
+                # 图标描画:淡色底稿 + 按 fraction 高亮填充
+                ghost = QColor(white)
+                ghost.setAlphaF(0.18)
+                _draw_strokes_partial(p, _GESTURE_ICONS[kind], 1.0,
+                                      ox, oy, size, size * 0.22, ghost)
+                fill = QColor(accent)
+                fill.setAlphaF(0.95)
+                _draw_strokes_partial(p, _GESTURE_ICONS[kind], frac,
+                                      ox, oy, size, size * 0.22, fill)
+
+        if flashing:
+            # 触发闪烁:图标位置画一个瞬时高亮圆环放大脉冲
+            ring = QRectF(ox - size, oy - size, size * 2, size * 2)
+            flash_c = QColor(white)
+            flash_c.setAlphaF(0.85)
+            pen = QPen(flash_c)
+            pen.setWidthF(max(2.0, size * 0.18))
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(ring)
+
+    def _paint_ring(self, p: QPainter, cx: float, cy: float, size: float,
+                    frac: float, accent: QColor, white: QColor) -> None:
+        """捏合点击:光标周围半透明整圆 + 扇形自顶部顺时针逐步填充。"""
+        rect = QRectF(cx - size, cy - size, size * 2, size * 2)
+        # 底圈(半透明整圆)
+        base = QColor(white)
+        base.setAlphaF(0.16)
+        pen = QPen(base)
+        pen.setWidthF(max(2.0, size * 0.16))
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(rect)
+        # 扇形进度(从 12 点顺时针,单位 1/16 度)
+        fill = QColor(accent)
+        fill.setAlphaF(0.9)
+        pen2 = QPen(fill)
+        pen2.setWidthF(max(2.0, size * 0.16))
+        p.setPen(pen2)
+        start = 90 * 16
+        span = int(-360 * 16 * max(0.0, min(1.0, frac)))
+        p.drawArc(rect, start, span)

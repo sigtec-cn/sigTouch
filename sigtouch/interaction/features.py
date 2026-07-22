@@ -5,6 +5,8 @@ from sigtouch.perception.types import HandFrame
 
 WRIST = 0
 THUMB_TIP = 4
+THUMB_MCP = 2
+THUMB_IP = 3
 INDEX_MCP = 5
 INDEX_PIP = 6
 INDEX_TIP = 8
@@ -65,3 +67,22 @@ def anchor_point(hand: HandFrame) -> tuple[float, float]:
     """光标锚点:食指指尖——光标始终钉在影子的食指上。"""
     x, y, _ = hand.landmarks[INDEX_TIP]
     return (x, y)
+
+
+def is_thumbs_up(hand: HandFrame) -> bool:
+    """竖大拇指:拇指伸直指向画面上方,其余四指弯曲握拳。
+
+    约定镜像画面、图像坐标 y 向下——"拇指竖起"=拇指尖(4)的 y 明显小于
+    拇指根(2)与腕(0)(更靠画面上方)。四指弯曲用指尖到腕距离 ≤ 指根到腕距离判定
+    (与 _finger_extended 相反)。用 tests/hand_fixtures.thumbs_up 固定约定。
+    """
+    lm = hand.landmarks
+    # 四指全部弯曲
+    if any(fingers_extended(hand)):
+        return False
+    # 拇指伸直:尖到腕距离 > 指根到腕距离(余量 1.05 防抖)
+    if _dist(lm[THUMB_TIP], lm[WRIST]) <= _dist(lm[THUMB_MCP], lm[WRIST]) * 1.05:
+        return False
+    # 拇指向上:尖的 y 比指根小至少 0.6 倍掌尺寸
+    upward = lm[THUMB_MCP][1] - lm[THUMB_TIP][1]
+    return upward > palm_size(hand) * 0.6

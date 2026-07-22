@@ -19,39 +19,63 @@ def _run(m, frames):
     return out
 
 
-def test_quick_pinch_release_is_left_click():
+def _hold(hand_fn, start_ms, end_ms, step=33):
+    """生成 [start,end) 时段内保持某姿态的帧序列。"""
+    return [(hand_fn(), t) for t in range(start_ms, end_ms, step)]
+
+
+def test_pinch_held_to_threshold_fires_left_click():
     m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (pinch_index(), 100),
-                   (open_hand(), 200)])
-    assert evs == [Event(EventKind.LEFT_CLICK)]
+    evs = _run(m, [(open_hand(), 0)] + _hold(pinch_index, 33, 1600))
+    # 默认 1500ms 触发点击;继续按住即按下左键进入拖拽
+    assert evs == [Event(EventKind.LEFT_CLICK), Event(EventKind.DRAG_START)]
 
 
-def test_held_pinch_is_drag_not_click():
+def test_pinch_released_early_fires_nothing():
     m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (pinch_index(), 150),
-                   (pinch_index(), 320), (pinch_index(), 400), (open_hand(), 500)])
-    assert evs == [Event(EventKind.DRAG_START), Event(EventKind.DRAG_END)]
+    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33),
+                   (pinch_index(), 800), (open_hand(), 900)])
+    assert evs == []  # 未到 1500ms 松开:不点击
 
 
-def test_quick_middle_pinch_is_right_click():
+def test_pinch_hold_time_configurable():
+    m = _machine(**{"interaction/pinch_hold_ms": 600})
+    evs = _run(m, [(open_hand(), 0)] + _hold(pinch_index, 33, 700))
+    assert evs == [Event(EventKind.LEFT_CLICK), Event(EventKind.DRAG_START)]
+
+
+def test_held_past_threshold_enters_drag():
     m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_middle(), 33), (open_hand(), 150)])
+    evs = _run(m, [(open_hand(), 0)] + _hold(pinch_index, 33, 2000)
+                   + [(open_hand(), 2100)])
+    # 触发点击→按住进拖拽(DRAG_START)→松开(DRAG_END)
+    assert evs == [Event(EventKind.LEFT_CLICK), Event(EventKind.DRAG_START),
+                   Event(EventKind.DRAG_END)]
+
+
+def test_middle_pinch_held_fires_right_click():
+    m = _machine()
+    evs = _run(m, [(open_hand(), 0)] + _hold(pinch_middle, 33, 1600))
     assert evs == [Event(EventKind.RIGHT_CLICK)]
 
 
-def test_held_middle_pinch_does_nothing():
+def test_middle_pinch_released_early_fires_nothing():
     m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_middle(), 33), (pinch_middle(), 400),
-                   (open_hand(), 500)])
+    evs = _run(m, [(open_hand(), 0), (pinch_middle(), 33),
+                   (pinch_middle(), 800), (open_hand(), 900)])
     assert evs == []
 
 
 def test_cooldown_suppresses_rapid_second_click():
-    m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (open_hand(), 120),
-                   (pinch_index(), 200), (open_hand(), 300),   # 冷却内,吞掉
-                   (pinch_index(), 700), (open_hand(), 800)])  # 冷却后
-    assert evs == [Event(EventKind.LEFT_CLICK), Event(EventKind.LEFT_CLICK)]
+    # 用短 hold + 短冷却直接验证冷却机制本身
+    m = _machine(**{"interaction/pinch_hold_ms": 300,
+                    "interaction/cooldown_ms": 1000})
+    first = _run(m, [(open_hand(), 0)] + _hold(pinch_index, 33, 400)
+                 + [(open_hand(), 500)])                 # 第一次点击 + 松开
+    assert Event(EventKind.LEFT_CLICK) in first
+    # 冷却(到 ~1400)内再次捏合到阈值:第二次点击应被抑制
+    second = _run(m, _hold(pinch_index, 600, 1000) + [(open_hand(), 1100)])
+    assert Event(EventKind.LEFT_CLICK) not in second
 
 
 def test_three_pinch_moving_up_scrolls_up():
@@ -67,9 +91,10 @@ def test_three_pinch_moving_up_scrolls_up():
 
 def test_hand_loss_during_drag_releases_button():
     m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (pinch_index(), 320),
-                   (None, 400)])
-    assert evs == [Event(EventKind.DRAG_START), Event(EventKind.DRAG_END)]
+    evs = _run(m, [(open_hand(), 0)] + _hold(pinch_index, 33, 2000)
+                   + [(None, 2100)])
+    assert Event(EventKind.LEFT_CLICK) in evs
+    assert evs[-1] == Event(EventKind.DRAG_END)
 
 
 def test_pinching_property_reflects_pinch_states():
@@ -84,7 +109,7 @@ def test_pinching_property_reflects_pinch_states():
 
 def test_disabled_gesture_emits_nothing():
     m = _machine(**{"gestures/left_click": False})
-    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (open_hand(), 120)])
+    evs = _run(m, [(open_hand(), 0)] + _hold(pinch_index, 33, 1600))
     assert evs == []
 
 
@@ -99,14 +124,14 @@ def test_hand_switch_mid_pinch_does_not_click():
 
 def test_hand_switch_mid_drag_ends_drag_once():
     m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_index(), 33), (pinch_index(), 320),
-                   (open_hand(dx=0.4), 400),       # 拖拽中被另一只手抢走(瞬移)
-                   (open_hand(dx=0.4), 500)])
-    assert evs == [Event(EventKind.DRAG_START), Event(EventKind.DRAG_END)]
+    evs = _run(m, [(open_hand(), 0)] + _hold(pinch_index, 33, 2000)
+                   + [(open_hand(dx=0.4), 2100),   # 拖拽中被另一只手抢走(瞬移)
+                      (open_hand(dx=0.4), 2200)])
+    assert evs.count(Event(EventKind.DRAG_END)) == 1  # 仅一次,不重复
 
 
 def test_small_movement_not_treated_as_teleport():
     m = _machine()
-    evs = _run(m, [(open_hand(), 0), (pinch_index(dx=0.05), 33),
-                   (open_hand(dx=0.05), 120)])     # 正常小位移
-    assert evs == [Event(EventKind.LEFT_CLICK)]    # 快捻仍正常成立
+    evs = _run(m, [(open_hand(), 0)]
+               + _hold(lambda: pinch_index(dx=0.05), 33, 1600))
+    assert evs == [Event(EventKind.LEFT_CLICK), Event(EventKind.DRAG_START)]

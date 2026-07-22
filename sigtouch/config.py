@@ -10,7 +10,10 @@ DEFAULTS: dict[str, Any] = {
     "interaction/pinch_enter": 0.35, # 捏合进入阈值(指尖距/手掌尺寸)
     "interaction/pinch_exit": 0.55,  # 捏合退出阈值(滞回)
     "interaction/click_max_ms": 250, # 快捻=点击的最长保持时间
-    "interaction/ok_hold_ms": 500,   # OK 手势触发回车的停留时长
+    "interaction/pinch_hold_ms": 1500,  # 捏合按住到该时长才触发点击(进度环)
+    "interaction/thumbs_up_hold_ms": 800,  # 竖大拇指保持该时长触发回车
+    "interaction/push_hold_ms": 600,      # 推手保持该时长触发退格
+    "interaction/ok_hold_ms": 500,   # OK 手势触发回车的停留时长(已废弃,见 thumbs_up_hold_ms)
     "interaction/cooldown_ms": 400,  # 离散手势冷却
     "interaction/freeze_ms": 150,    # 捏合瞬间光标冻结时长
     "interaction/scroll_gain": 40.0, # 归一化位移→滚轮行数增益

@@ -307,7 +307,7 @@ class SigTouchApp(QObject):
                 self._cfg.get("display/camera_screen_offset_m"),
                 self._cfg.get("display/hand_scale_multiplier"))
             self._overlay.update_hand(result.hand, scale,
-                                      self._machine.feedback, cursor_px=(x, y))
+                                      self._machine.progress, cursor_px=(x, y))
         else:
             self._overlay.clear()
         for ev in events:

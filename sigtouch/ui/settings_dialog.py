@@ -322,20 +322,36 @@ class SettingsDialog(QDialog):
                                lambda v: f"{v/10:.1f}"),
                   "One Euro:越低越平滑,越高越跟手")
 
-        fg = self._group(v, "手势")
-        self._row(fg, "点击最长保持",
-                  self._spin("interaction/click_max_ms", 100, 600),
-                  "捏合超过该时长视为拖拽")
-        self._row(fg, "OK 停留时长",
-                  self._spin("interaction/ok_hold_ms", 200, 1500), "")
-        self._row(fg, "手势冷却",
-                  self._spin("interaction/cooldown_ms", 100, 1500), "")
-        for key, label in (("gestures/left_click", "左键(拇指+食指捻)"),
-                           ("gestures/right_click", "右键(拇指+中指捻)"),
+        fg = self._group(v, "手势判定时间")
+        self._row(fg, "捏合点击",
+                  self._slider("interaction/pinch_hold_ms", 500, 3000,
+                               lambda v: float(v),
+                               lambda s: round(float(s)),
+                               lambda v: f"{v/1000:.1f}s"),
+                  "捏合按住到该时长才触发点击,光标周围圆环显示进度")
+        self._row(fg, "竖大拇指",
+                  self._slider("interaction/thumbs_up_hold_ms", 300, 2000,
+                               lambda v: float(v),
+                               lambda s: round(float(s)),
+                               lambda v: f"{v/1000:.1f}s"),
+                  "竖起大拇指保持该时长触发回车")
+        self._row(fg, "推手退格",
+                  self._slider("interaction/push_hold_ms", 300, 2000,
+                               lambda v: float(v),
+                               lambda s: round(float(s)),
+                               lambda v: f"{v/1000:.1f}s"),
+                  "张开手掌向前推并保持该时长触发退格")
+
+        fg2 = self._group(v, "手势开关")
+        for key, label in (("gestures/left_click", "左键(拇指+食指捏合按住)"),
+                           ("gestures/right_click", "右键(拇指+中指捏合按住)"),
                            ("gestures/scroll", "滚动(三指捻移动)"),
-                           ("gestures/enter", "回车(OK 手势)"),
+                           ("gestures/enter", "回车(竖大拇指)"),
                            ("gestures/backspace", "退格(推手)")):
-            fg.addRow(self._check(key, label))
+            fg2.addRow(self._check(key, label))
+        self._row(fg2, "手势冷却",
+                  self._spin("interaction/cooldown_ms", 100, 1500),
+                  "同一手势触发后的最短间隔,防连发")
         return page
 
     def _display_page(self):

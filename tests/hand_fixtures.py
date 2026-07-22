@@ -80,3 +80,23 @@ def ok_pose(**kw) -> HandFrame:
     scale = kw.get('scale', 1.0)
     ix, iy, _ = h.landmarks[8]
     return _with(h, {4: (ix - 0.005 * scale, iy)})
+
+
+def thumbs_up(**kw) -> HandFrame:
+    """竖大拇指:拇指伸直指向画面上方(y 更小),食/中/无名/小指弯曲握拳。"""
+    h = open_hand(**kw)
+    scale, dx, dy = _get_scale_dx_dy(**kw)
+    wx, wy, _ = h.landmarks[0]   # 腕
+    # 拇指:各节沿"向上"排列,尖明显在根上方(掌尺寸 scale=0.10*scale,上方阈值 0.6)
+    changes = {
+        1: (wx - 0.04 * scale, wy - 0.06 * scale),
+        2: (wx - 0.045 * scale, wy - 0.10 * scale),
+        3: (wx - 0.05 * scale, wy - 0.14 * scale),
+        4: (wx - 0.05 * scale, wy - 0.18 * scale),   # 拇指尖,最高
+        # 四指弯曲:指尖收回靠近腕(指尖到腕距离 < 指根到腕距离)
+        8: (wx - 0.01 * scale, wy - 0.02 * scale),
+        12: (wx + 0.0 * scale, wy - 0.02 * scale),
+        16: (wx + 0.03 * scale, wy - 0.02 * scale),
+        20: (wx + 0.06 * scale, wy - 0.01 * scale),
+    }
+    return _with(h, changes)

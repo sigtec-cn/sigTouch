@@ -77,12 +77,12 @@ def app_obj(qapp, monkeypatch):
 
 
 def _drive_to_dragging(app_obj) -> None:
-    """三帧序列把手势状态机推入 DRAGGING:张手 → 捏合(t=33)→ 保持捏合超过 250ms(t=400)。"""
+    """把状态机推入 DRAGGING:张手 → 捏合保持超过 pinch_hold_ms(1500ms)→ 拖拽。"""
     app_obj._on_result(FrameResult(timestamp_ms=0, hand=open_hand(),
                                    face_distance_m=0.6, face_present=True))
     app_obj._on_result(FrameResult(timestamp_ms=33, hand=pinch_index(),
                                    face_distance_m=0.6, face_present=True))
-    app_obj._on_result(FrameResult(timestamp_ms=400, hand=pinch_index(),
+    app_obj._on_result(FrameResult(timestamp_ms=1600, hand=pinch_index(),
                                    face_distance_m=0.6, face_present=True))
 
 
