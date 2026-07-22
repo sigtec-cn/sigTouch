@@ -3,6 +3,9 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import sys
+import types
+
 import pytest
 from PySide6.QtWidgets import QApplication
 
@@ -17,6 +20,46 @@ def qapp():
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     return app
+
+
+@pytest.fixture(autouse=True)
+def _stub_pynput(monkeypatch):
+    captured = {}
+
+    class FakeHotKeys:
+        def __init__(self, mapping):
+            captured["mapping"] = mapping
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    class _FakeController:
+        """Injector() 无条件懒导入 Controller;测试环境下用无操作替身。"""
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def __setattr__(self, name, value):
+            object.__setattr__(self, name, value)
+
+        def __getattr__(self, name):
+            return lambda *a, **kw: None
+
+    kb = types.ModuleType("pynput.keyboard")
+    kb.GlobalHotKeys = FakeHotKeys
+    kb.Controller = _FakeController
+    mouse = types.ModuleType("pynput.mouse")
+    mouse.Controller = _FakeController
+    pk = types.ModuleType("pynput")
+    pk.keyboard = kb
+    pk.mouse = mouse
+    monkeypatch.setitem(sys.modules, "pynput", pk)
+    monkeypatch.setitem(sys.modules, "pynput.keyboard", kb)
+    monkeypatch.setitem(sys.modules, "pynput.mouse", mouse)
+    return captured
 
 
 class _VisionStub:
@@ -106,33 +149,20 @@ def test_on_result_dropped_when_vision_none(qapp, monkeypatch):
 
 
 # ---- ④ 设置快捷键 ----
-def test_settings_hotkey_registered(qapp, monkeypatch):
+def test_settings_hotkey_registered(qapp, monkeypatch, _stub_pynput):
     _patch_perms(monkeypatch, {k: True for k in K})
     a = _make_app(monkeypatch)
     a._hotkey_needs_restart = False
     a._im_granted_at_start = True
 
-    captured = {}
-
-    class FakeHotKeys:
-        def __init__(self, mapping):
-            captured["mapping"] = mapping
-
-        def start(self):
-            pass
-
-        def stop(self):
-            pass
-
-    import pynput.keyboard as pk
-    monkeypatch.setattr(pk, "GlobalHotKeys", FakeHotKeys)
+    _stub_pynput.clear()
     a._setup_hotkey()
-    m = captured["mapping"]
+    m = _stub_pynput["mapping"]
     assert m[a._cfg.get("general/pause_hotkey").strip()]
     assert m[a._cfg.get("general/settings_hotkey").strip()]
 
 
-def test_settings_hotkey_same_as_pause_not_duplicated(qapp, monkeypatch):
+def test_settings_hotkey_same_as_pause_not_duplicated(qapp, monkeypatch, _stub_pynput):
     _patch_perms(monkeypatch, {k: True for k in K})
     cfg = Config(backend={
         "general/pause_hotkey": "<ctrl>+<alt>+x",
@@ -140,22 +170,9 @@ def test_settings_hotkey_same_as_pause_not_duplicated(qapp, monkeypatch):
     a = _make_app(monkeypatch, cfg)
     a._hotkey_needs_restart = False
 
-    captured = {}
-
-    class FakeHotKeys:
-        def __init__(self, mapping):
-            captured["mapping"] = mapping
-
-        def start(self):
-            pass
-
-        def stop(self):
-            pass
-
-    import pynput.keyboard as pk
-    monkeypatch.setattr(pk, "GlobalHotKeys", FakeHotKeys)
+    _stub_pynput.clear()
     a._setup_hotkey()
-    assert len(captured["mapping"]) == 1  # 同组合只注册一次
+    assert len(_stub_pynput["mapping"]) == 1  # 同组合只注册一次
 
 
 # ---- ⑤ 屏幕检测守卫 ----

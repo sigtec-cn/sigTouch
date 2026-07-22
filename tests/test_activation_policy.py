@@ -3,6 +3,9 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import sys
+import types
+
 import pytest
 from PySide6.QtWidgets import QApplication
 
@@ -16,6 +19,46 @@ def qapp():
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     return app
+
+
+@pytest.fixture(autouse=True)
+def _stub_pynput(monkeypatch):
+    captured = {}
+
+    class FakeHotKeys:
+        def __init__(self, mapping):
+            captured["mapping"] = mapping
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    class _FakeController:
+        """Injector() 无条件懒导入 Controller;测试环境下用无操作替身。"""
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def __setattr__(self, name, value):
+            object.__setattr__(self, name, value)
+
+        def __getattr__(self, name):
+            return lambda *a, **kw: None
+
+    kb = types.ModuleType("pynput.keyboard")
+    kb.GlobalHotKeys = FakeHotKeys
+    kb.Controller = _FakeController
+    mouse = types.ModuleType("pynput.mouse")
+    mouse.Controller = _FakeController
+    pk = types.ModuleType("pynput")
+    pk.keyboard = kb
+    pk.mouse = mouse
+    monkeypatch.setitem(sys.modules, "pynput", pk)
+    monkeypatch.setitem(sys.modules, "pynput.keyboard", kb)
+    monkeypatch.setitem(sys.modules, "pynput.mouse", mouse)
+    return captured
 
 
 class _VisionStub:
