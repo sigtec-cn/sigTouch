@@ -44,7 +44,7 @@ class _State(Enum):
     MIDDLE_PINCH = auto()  # 右捏合计时中
     SCROLLING = auto()
     THUMBS_UP = auto()     # 竖大拇指保持中
-    PUSH = auto()          # 推手保持中
+    THUMBS_LEFT = auto()   # 拇指向左保持中
 
 
 _TELEPORT_THRESHOLD = 0.25  # 归一化锚点单帧跳变超过此值视为换手/瞬移
@@ -55,7 +55,7 @@ _PINCH_STATES = frozenset({_State.INDEX_PINCH, _State.DRAGGING,
 
 _HOLD_STATES = frozenset({_State.INDEX_PINCH, _State.DRAGGING,
                           _State.MIDDLE_PINCH, _State.SCROLLING,
-                          _State.THUMBS_UP, _State.PUSH})
+                          _State.THUMBS_UP, _State.THUMBS_LEFT})
 
 _GESTURE_TOGGLE = {
     EventKind.LEFT_CLICK: "gestures/left_click",
@@ -76,7 +76,6 @@ class GestureStateMachine:
         self._cooldown_until: dict[EventKind, int] = {}
         self._scroll_last_y: float | None = None
         self._scroll_accum = 0.0
-        self._push_history: list[tuple[int, float]] = []
         self._last_anchor: tuple[float, float] | None = None
         self._fired_hold = False                # 当前保持态是否已触发过(防连发)
         self.progress: GestureProgress | None = None
@@ -112,7 +111,6 @@ class GestureStateMachine:
 
     def _reset_transient(self) -> None:
         self._scroll_last_y = None
-        self._push_history.clear()
 
     def update(self, hand: HandFrame | None, t_ms: int) -> list[Event]:
         out: list[Event] = []
@@ -143,6 +141,8 @@ class GestureStateMachine:
         mid_r = F.pinch_ratio(hand, F.MIDDLE_TIP)
         idx_pinch, mid_pinch = idx_r < enter, mid_r < enter
         thumbs_up = F.is_thumbs_up(hand)
+        # thumbs_up 优先于 thumbs_left 判定(两姿态互斥,顺序仅作决断)
+        thumbs_left = (not thumbs_up) and F.is_thumbs_left(hand)
 
         if self._state is _State.IDLE:
             if idx_pinch and mid_pinch:
@@ -155,8 +155,8 @@ class GestureStateMachine:
                 self._to(_State.MIDDLE_PINCH, t_ms)
             elif thumbs_up:
                 self._to(_State.THUMBS_UP, t_ms)
-            elif self._push_start(hand, t_ms):
-                self._to(_State.PUSH, t_ms)
+            elif thumbs_left:
+                self._to(_State.THUMBS_LEFT, t_ms)
 
         elif self._state is _State.INDEX_PINCH:
             self._update_index_pinch(hand, t_ms, out, idx_r, mid_pinch, exit_)
@@ -175,8 +175,8 @@ class GestureStateMachine:
         elif self._state is _State.THUMBS_UP:
             self._update_thumbs_up(hand, t_ms, out, thumbs_up)
 
-        elif self._state is _State.PUSH:
-            self._update_push(hand, t_ms, out)
+        elif self._state is _State.THUMBS_LEFT:
+            self._update_thumbs_left(hand, t_ms, out, thumbs_left)
 
         return out
 
@@ -250,34 +250,11 @@ class GestureStateMachine:
             return
         self.progress = GestureProgress("enter", frac)
 
-    def _push_pose(self, hand) -> bool:
-        """张开手掌、掌心朝屏(推手的静态姿态前提)。"""
-        return all(F.fingers_extended(hand)) and F.palm_facing_camera(hand)
-
-    def _push_start(self, hand, t_ms) -> bool:
-        """进入推手:姿态满足且面积在观察窗口内持续增长(确有前推动作)。
-
-        仅凭静态张开姿态不进入——否则普通张开手会长期占住 PUSH 状态,
-        阻塞捏合/竖大拇指的进入并污染 pinching 判定。
-        """
-        if not self._push_pose(hand):
-            self._push_history.clear()
-            return False
-        area = F.bbox_area(hand)
-        window = self._c.get("interaction/push_window_ms")
-        self._push_history.append((t_ms, area))
-        self._push_history = [(t, a) for t, a in self._push_history
-                              if t_ms - t <= window]
-        base = min(a for _, a in self._push_history)
-        return base > 0 and area / base >= self._c.get("interaction/push_area_ratio")
-
-    def _update_push(self, hand, t_ms, out):
-        if not self._push_pose(hand):
-            self._to(_State.IDLE, t_ms)
-            self._push_history.clear()
+    def _update_thumbs_left(self, hand, t_ms, out, thumbs_left):
+        if not thumbs_left:
+            self._to(_State.IDLE, t_ms)  # 姿态破坏 → 回位重武装
             return
-        # 进入时已确认前推;保持期只要求姿态不破坏,计时到阈值即触发
-        hold = self._c.get("interaction/push_hold_ms")
+        hold = self._c.get("interaction/thumbs_left_hold_ms")
         held = t_ms - self._state_t
         frac = min(1.0, held / hold)
         if not self._fired_hold and held >= hold and \

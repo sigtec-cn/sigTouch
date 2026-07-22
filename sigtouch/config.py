@@ -11,15 +11,13 @@ DEFAULTS: dict[str, Any] = {
     "interaction/pinch_exit": 0.55,  # 捏合退出阈值(滞回)
     "interaction/click_max_ms": 250, # 快捻=点击的最长保持时间
     "interaction/pinch_hold_ms": 1500,  # 捏合按住到该时长才触发点击(进度环)
-    "interaction/thumbs_up_hold_ms": 800,  # 竖大拇指保持该时长触发回车
-    "interaction/push_hold_ms": 600,      # 推手保持该时长触发退格
+    "interaction/thumbs_up_hold_ms": 1500,  # 竖大拇指保持该时长触发回车
+    "interaction/thumbs_left_hold_ms": 1500,  # 拇指向左保持该时长触发退格
     "interaction/ok_hold_ms": 500,   # OK 手势触发回车的停留时长(已废弃,见 thumbs_up_hold_ms)
     "interaction/cooldown_ms": 400,  # 离散手势冷却
     "interaction/freeze_ms": 150,    # 捏合瞬间光标冻结时长
     "interaction/scroll_gain": 40.0, # 归一化位移→滚轮行数增益
     "interaction/active_hand": "Right",  # 控制手:"Right" | "Left"
-    "interaction/push_area_ratio": 1.35,  # 推手:包围盒面积放大倍数
-    "interaction/push_window_ms": 300,    # 推手:面积增长观察窗口
     "interaction/smooth_min_cutoff": 1.0, # One Euro 参数
     "interaction/smooth_beta": 0.02,
     "interaction/smooth_algo": "kalman",  # 平滑算法:"kalman" | "one_euro"

@@ -86,3 +86,21 @@ def is_thumbs_up(hand: HandFrame) -> bool:
     # 拇指向上:尖的 y 比指根小至少 0.6 倍掌尺寸
     upward = lm[THUMB_MCP][1] - lm[THUMB_TIP][1]
     return upward > palm_size(hand) * 0.6
+
+
+def is_thumbs_left(hand: HandFrame) -> bool:
+    """拇指向左:拇指伸直指向画面左侧,其余四指弯曲握拳。不依赖 handedness。
+
+    与 is_thumbs_up 共用四指弯曲 + 拇指伸直的判定准绳,区别仅在拇指指向轴:
+    "指向左"= 拇指尖(4)的 x 明显小于拇指根(2)(更靠画面左侧)。
+    """
+    lm = hand.landmarks
+    # 四指全部弯曲
+    if any(fingers_extended(hand)):
+        return False
+    # 拇指伸直:尖到腕距离 > 指根到腕距离(余量 1.05 防抖),与 is_thumbs_up 同准
+    if _dist(lm[THUMB_TIP], lm[WRIST]) <= _dist(lm[THUMB_MCP], lm[WRIST]) * 1.05:
+        return False
+    # 拇指向左:尖的 x 比指根小至少 0.6 倍掌尺寸
+    leftward = lm[THUMB_MCP][0] - lm[THUMB_TIP][0]
+    return leftward > palm_size(hand) * 0.6

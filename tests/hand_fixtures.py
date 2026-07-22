@@ -100,3 +100,24 @@ def thumbs_up(**kw) -> HandFrame:
         20: (wx + 0.06 * scale, wy - 0.01 * scale),
     }
     return _with(h, changes)
+
+
+def thumbs_left(**kw) -> HandFrame:
+    """拇指向左:拇指伸直指向画面左侧(x 更小),食/中/无名/小指弯曲握拳。"""
+    h = open_hand(**kw)
+    scale, dx, dy = _get_scale_dx_dy(**kw)
+    wx, wy, _ = h.landmarks[0]   # 腕
+    mcp_x, mcp_y = wx - 0.03 * scale, wy - 0.01 * scale
+    tip_x = mcp_x - 0.08 * scale  # tip 在 mcp 左侧 palm(0.10*scale)×0.8 处,y 同高
+    changes = {
+        1: (wx - 0.015 * scale, wy - 0.005 * scale),
+        2: (mcp_x, mcp_y),
+        3: (mcp_x - 0.045 * scale, mcp_y),
+        4: (tip_x, mcp_y),   # 拇指尖,最靠左
+        # 四指弯曲:指尖收回靠近腕(指尖到腕距离 < 指根到腕距离)
+        8: (wx - 0.01 * scale, wy - 0.02 * scale),
+        12: (wx + 0.0 * scale, wy - 0.02 * scale),
+        16: (wx + 0.03 * scale, wy - 0.02 * scale),
+        20: (wx + 0.06 * scale, wy - 0.01 * scale),
+    }
+    return _with(h, changes)
