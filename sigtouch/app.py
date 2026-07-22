@@ -18,6 +18,7 @@ from sigtouch.output.injector import Injector
 from sigtouch.perception.distance import overlay_scale
 from sigtouch.platformsupport import permissions as perms
 from sigtouch.platformsupport.permissions import PermissionKind
+from sigtouch.ui import native
 from sigtouch.ui.overlay import OverlayWindow, target_screen_index
 from sigtouch.ui.permission_wizard import PermissionWizard
 from sigtouch.ui.preview import PreviewWindow
@@ -47,6 +48,7 @@ class SuspendGate:
 class _HotkeyBridge(QObject):
     """pynput 全局快捷键回调跑在监听线程,经 Qt 信号安全转到主线程。"""
     pressed = Signal()
+    settings_pressed = Signal()
 
 
 class QSettingsBackend:
@@ -85,6 +87,7 @@ class SigTouchApp(QObject):
 
         self._hotkey_bridge = _HotkeyBridge()
         self._hotkey_bridge.pressed.connect(self._toggle_pause)
+        self._hotkey_bridge.settings_pressed.connect(self._show_settings)
         self._hotkey_listener = None
         self._im_granted_at_start = perms.check(PermissionKind.INPUT_MONITORING)
         self._hotkey_needs_restart = False
@@ -92,6 +95,9 @@ class SigTouchApp(QObject):
         self._wizard = PermissionWizard(restart_hint=lambda: self._hotkey_needs_restart)
         self._wizard.restart_requested.connect(self._restart_app)
         self._wizard.all_granted.connect(self._on_permissions_changed)
+        # 配置窗关闭后恢复纯托盘(accessory),不在 Dock 常驻
+        self._settings_dlg.installEventFilter(self)
+        self._wizard.installEventFilter(self)
         self._perm_timer = QTimer(self)
         self._perm_timer.timeout.connect(self._on_permissions_changed)
 
@@ -102,6 +108,7 @@ class SigTouchApp(QObject):
             self._show_wizard()
             self._perm_timer.start(2000)
 
+        self._detect_screen_size()
         self._build_interaction()
         self._vision: VisionThread | None = None
         self._start_vision()
@@ -135,9 +142,81 @@ class SigTouchApp(QObject):
         self._refresh_tray_state()
 
     def _show_wizard(self) -> None:
-        self._wizard.show()
-        self._wizard.raise_()
-        self._wizard.activateWindow()
+        self._present_window(self._wizard)
+
+    def _detect_screen_size(self) -> None:
+        """自动检测屏幕物理尺寸;检测不到且用户未确认过时,提示去设置。
+
+        已检测/确认过(display/screen_diag_detected)则跳过,尊重用户手填值。
+        仅在当前值仍是出厂默认时才自动写入检测结果,避免覆盖用户/外部已设的值。
+        """
+        if self._cfg.get("display/screen_diag_detected"):
+            return
+        # 无屏测试平台(offscreen/minimal)不做检测与提示
+        if QGuiApplication.platformName() != "cocoa":
+            return
+        from sigtouch.config import DEFAULTS
+        from sigtouch.platformsupport import screen
+        diag = screen.detect_screen_diag_inch()
+        at_factory_default = (
+            self._cfg.get("display/screen_diag_inch")
+            == DEFAULTS["display/screen_diag_inch"])
+        if diag is not None:
+            if at_factory_default:
+                self._cfg.set("display/screen_diag_inch", diag)
+                _log.info("自动检测屏幕对角线: %.1f 英寸", diag)
+            self._cfg.set("display/screen_diag_detected", True)
+            return
+        # 检测失败:首次提示用户手动设置(不阻塞,用户可从托盘进设置)
+        _log.info("屏幕尺寸无法自动检测,等待用户在设置中确认")
+        QTimer.singleShot(1500, self._prompt_screen_size)
+
+    def _prompt_screen_size(self) -> None:
+        """延迟弹出提示:引导用户填屏幕尺寸(托盘应用,先激活再弹)。"""
+        if self._cfg.get("display/screen_diag_detected"):
+            return  # 期间已被设置/检测成功
+        from PySide6.QtWidgets import QMessageBox
+        native.set_activation_policy_regular()
+        native.activate_app()
+        box = QMessageBox(self._settings_dlg)
+        box.setWindowTitle("请设置屏幕尺寸")
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText("无法自动检测屏幕物理尺寸。\n"
+                    "手影大小需要准确的屏幕对角线尺寸,请在设置「显示」页填写。")
+        open_btn = box.addButton("打开设置", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("稍后", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        native.set_activation_policy_accessory()
+        if box.clickedButton() is open_btn:
+            self._show_settings()
+
+    def _present_window(self, widget) -> None:
+        """macOS 托盘 App 弹配置窗:先切 Regular 策略并拉到前台,窗口才置前获焦。
+
+        LSUIElement 下 accessory 应用不激活,托盘菜单弹出的窗口会被压住且
+        不响应输入;先激活再 show。窗口关闭由 _maybe_restore_accessory 恢复纯托盘。
+        """
+        native.set_activation_policy_regular()
+        native.activate_app()
+        widget.show()
+        widget.raise_()
+        widget.activateWindow()
+
+    def _maybe_restore_accessory(self) -> None:
+        """配置窗都关完后恢复 Accessory 纯托盘(不在 Dock 常驻)。"""
+        if (self._settings_dlg.isVisible() or self._wizard.isVisible()):
+            return
+        native.set_activation_policy_accessory()
+
+    def eventFilter(self, obj, event) -> bool:
+        """监听配置窗 Hide:关窗后恢复 accessory 托盘策略。"""
+        from PySide6.QtCore import QEvent
+
+        if event.type() == QEvent.Type.Hide and obj in (
+                self._settings_dlg, self._wizard):
+            # 用 QTimer 延迟到事件循环空闲再判断,确保 isVisible 状态已更新
+            QTimer.singleShot(0, self._maybe_restore_accessory)
+        return super().eventFilter(obj, event)
 
     # ---- 构建/重建 ----
     def _build_interaction(self) -> None:
@@ -150,7 +229,10 @@ class SigTouchApp(QObject):
             margin=self._cfg.get("interaction/box_margin"),
             freeze_ms=self._cfg.get("interaction/freeze_ms"),
             min_cutoff=self._cfg.get("interaction/smooth_min_cutoff"),
-            beta=self._cfg.get("interaction/smooth_beta"))
+            beta=self._cfg.get("interaction/smooth_beta"),
+            smooth_algo=self._cfg.get("interaction/smooth_algo"),
+            kalman_process=self._cfg.get("interaction/kalman_process"),
+            kalman_measure=self._cfg.get("interaction/kalman_measure"))
         self._screen_origin = (geo.x(), geo.y())
         self._gate = SuspendGate(
             int(self._cfg.get("interaction/suspend_after_s") * 1000))
@@ -166,17 +248,7 @@ class SigTouchApp(QObject):
         self._vision.start()
 
     def _restart_vision(self) -> None:
-        old = self._vision
-        if old is not None:
-            # 先断开信号:即使旧线程卡在 cap.read() 未能退出,
-            # 也不会再驱动 _on_result(孤儿线程 _running=False,读取返回后自行结束)
-            for sig in (old.result_ready, old.preview_frame,
-                        old.camera_error, old.recovered):
-                try:
-                    sig.disconnect()
-                except RuntimeError:
-                    pass  # 无连接可断
-            old.stop()
+        self._stop_vision()
         self._start_vision()
 
     def _setup_hotkey(self) -> None:
@@ -187,20 +259,27 @@ class SigTouchApp(QObject):
             self._hotkey_listener = None
         if not perms.check(PermissionKind.INPUT_MONITORING):
             return  # 输入监控未授权:跳过,权限就绪后由 _ensure_capabilities 再启动
-        combo = self._cfg.get("general/pause_hotkey").strip()
-        if not combo:
+        mapping = {}
+        pause = self._cfg.get("general/pause_hotkey").strip()
+        if pause:
+            mapping[pause] = self._hotkey_bridge.pressed.emit
+        settings = self._cfg.get("general/settings_hotkey").strip()
+        if settings and settings != pause:
+            mapping[settings] = self._hotkey_bridge.settings_pressed.emit
+        if not mapping:
             return
         from pynput import keyboard
         try:
-            self._hotkey_listener = keyboard.GlobalHotKeys(
-                {combo: self._hotkey_bridge.pressed.emit})
+            self._hotkey_listener = keyboard.GlobalHotKeys(mapping)
             self._hotkey_listener.start()
         except Exception:
-            _log.warning("全局快捷键注册失败(组合: %r),已禁用", combo,
+            _log.warning("全局快捷键注册失败(组合: %r),已禁用", list(mapping),
                         exc_info=True)  # 无效组合或系统权限缺失:禁用快捷键,不阻塞启动
 
     # ---- 每帧主流程 ----
     def _on_result(self, result) -> None:
+        if self._vision is None:
+            return  # 已暂停/摄像头已关:孤儿线程的尾帧直接丢弃
         self._preview.update_result(result)
         suspended = self._gate.update(result.face_present, result.timestamp_ms)
         if self._paused or suspended:
@@ -242,8 +321,24 @@ class SigTouchApp(QObject):
             if self._injector is not None:
                 self._injector.release_all()
             self._overlay.clear()
-            self._vision.set_idle(True)
+            self._stop_vision()   # 暂停即关摄像头(省电/隐私),恢复时再开
+        else:
+            self._start_vision()  # 恢复:重新打开并连接摄像头
         self._refresh_tray_state()
+
+    def _stop_vision(self) -> None:
+        """停止视觉线程并断开信号(摄像头随之释放)。"""
+        old = self._vision
+        if old is None:
+            return
+        for sig in (old.result_ready, old.preview_frame,
+                    old.camera_error, old.recovered):
+            try:
+                sig.disconnect()
+            except RuntimeError:
+                pass
+        old.stop()
+        self._vision = None
 
     def _current_state(self) -> str:
         """常规三态(error 为瞬时态,由 camera_error 信号单独驱动)。"""
@@ -268,14 +363,14 @@ class SigTouchApp(QObject):
         self._apply_state(self._current_state())
 
     def _show_settings(self) -> None:
+        self._present_window(self._settings_dlg)
         self._settings_dlg.set_running_state(self._ui_state)
         self._settings_dlg.refresh_hotkey_label()
-        self._settings_dlg.show()
-        self._settings_dlg.raise_()
 
     def _show_preview(self) -> None:
         self._preview.show()
-        self._vision.set_preview(True)
+        if self._vision is not None:
+            self._vision.set_preview(True)
 
     def _apply_light_settings(self) -> None:
         """设置即时生效的轻量路径:不重启视觉线程。"""
@@ -300,6 +395,8 @@ class SigTouchApp(QObject):
         self._restart_vision()
 
     def _check_watchdog(self) -> None:
+        if self._paused:
+            return  # 暂停态摄像头本就关闭,不做存活重启
         if self._vision is None or not self._vision.isRunning():
             self._restart_vision()
             return

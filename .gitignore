@@ -4,3 +4,7 @@ __pycache__/
 dist/
 build/
 sigtouch/models/*.task
+
+# 本地代码签名私钥/证书(不入库;每台机器自行生成或分发)
+packaging/codesign/sigtouch_dev.p12
+packaging/codesign/sigtouch_dev_cert.pem

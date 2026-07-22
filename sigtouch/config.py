@@ -19,10 +19,15 @@ DEFAULTS: dict[str, Any] = {
     "interaction/push_window_ms": 300,    # 推手:面积增长观察窗口
     "interaction/smooth_min_cutoff": 1.0, # One Euro 参数
     "interaction/smooth_beta": 0.02,
+    "interaction/smooth_algo": "kalman",  # 平滑算法:"kalman" | "one_euro"
+    "interaction/kalman_process": 2000.0, # 卡尔曼过程噪声(大=跟手,小=稳)
+    "interaction/kalman_measure": 4.0,    # 卡尔曼测量噪声(大=更平滑)
     "interaction/suspend_after_s": 3.0,   # 无人脸自动挂起时长
     "display/screen_diag_inch": 24.0,
+    "display/screen_diag_detected": False,  # 屏幕尺寸是否已自动检测/用户确认;否→提示设置
     "display/overlay_opacity": 0.35,
     "display/overlay_color": "#000000",  # 深色影子默认
+    "display/glow_intensity": 1.0,       # 手影亮白辉光强度(0=关闭),暗背景可读性
     "display/monitor": 0,
     "display/camera_screen_offset_m": 0.0,  # 摄像头到屏幕平面距离(米,摄像头在屏前为正)
     "display/hand_scale_multiplier": 1.0,   # 手影大小倍率(物理模型后的用户微调)
@@ -34,6 +39,7 @@ DEFAULTS: dict[str, Any] = {
     "gestures/backspace": True,
     "general/autostart": False,
     "general/pause_hotkey": "<ctrl>+<alt>+p",  # pynput GlobalHotKeys 语法;空串=禁用
+    "general/settings_hotkey": "<ctrl>+<alt>+s",  # 唤起设置窗口的全局快捷键;空串=禁用
 }
 
 _FALSY_STRINGS = {"false", "0", "no", "off", ""}

@@ -1,8 +1,11 @@
-"""设置窗口:左导航 + 卡片页 + 即时生效。
+"""设置窗口:左导航 + 分组卡片页 + 即时生效。
 
 _fields 注册表 (key -> (widget, getter, setter)) 与 field_widget()/apply() 兼容保留;
 控件变更即时写入 Config:普通键立即发 settings_applied,摄像头组与控制手
 进入 500ms 防抖后发 vision_restart_needed(重启视觉线程代价高,合并连续改动)。
+
+布局约定:每页若干"分组卡片"(带小标题),控件用表单对齐;相关项聚成一组,
+滑杆右侧实时数值;描述文字淡色小字置底。整体留白、对齐、层级比 v1.3 更清晰。
 """
 import html
 
@@ -33,8 +36,8 @@ class SettingsDialog(QDialog):
     def __init__(self, cfg: Config, parent=None):
         super().__init__(parent)
         self.setWindowTitle("SigTouch 设置")
-        self.setMinimumSize(660, 600)
-        self.resize(660, 600)
+        self.setMinimumSize(680, 620)
+        self.resize(700, 640)
         self._cfg = cfg
         self._fields: dict[str, tuple] = {}
         self._loading = False
@@ -49,11 +52,12 @@ class SettingsDialog(QDialog):
         self._apply_timer.setInterval(_APPLY_DEBOUNCE_MS)
         self._apply_timer.timeout.connect(self.settings_applied)
 
+        # 顶部状态卡
         status_card = QFrame()
         status_card.setProperty("class", "card")
         sv = QVBoxLayout(status_card)
-        sv.setContentsMargins(14, 10, 14, 10)
-        sv.setSpacing(2)
+        sv.setContentsMargins(16, 12, 16, 12)
+        sv.setSpacing(3)
         self._status_badge = QLabel()
         sv.addWidget(self._status_badge)
         self._hotkey_line = QLabel()
@@ -61,7 +65,7 @@ class SettingsDialog(QDialog):
         sv.addWidget(self._hotkey_line)
 
         nav = QListWidget()
-        nav.setFixedWidth(140)
+        nav.setFixedWidth(148)
         nav.addItems(_NAV_ITEMS)
         self._stack = QStackedWidget()
         for build in (self._camera_page, self._interaction_page,
@@ -71,20 +75,25 @@ class SettingsDialog(QDialog):
         nav.setCurrentRow(0)
 
         restore = QPushButton("恢复默认")
+        restore.setProperty("class", "ghost")
         restore.clicked.connect(self._restore_defaults)
-        close = QPushButton("关闭")
+        close = QPushButton("完成")
         close.setProperty("class", "primary")
+        close.setDefault(True)
         close.clicked.connect(self.close)
         bottom = QHBoxLayout()
+        bottom.setContentsMargins(2, 4, 2, 0)
         bottom.addWidget(restore)
         bottom.addStretch(1)
         bottom.addWidget(close)
 
         body = QHBoxLayout()
+        body.setSpacing(6)
         body.addWidget(nav)
         body.addWidget(self._stack, 1)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 16, 12)
+        layout.setContentsMargins(14, 14, 18, 14)
+        layout.setSpacing(10)
         layout.addWidget(status_card)
         layout.addLayout(body, 1)
         layout.addLayout(bottom)
@@ -93,25 +102,38 @@ class SettingsDialog(QDialog):
         self.refresh_hotkey_label()
 
     # ---- 页面骨架 ----
-    def _page(self, title: str) -> tuple:
-        """返回 (page_widget, form_layout):标题 + 白卡片内表单。"""
+    def _page(self) -> "tuple[QWidget, QVBoxLayout]":
+        """返回 (page_widget, 页垂直布局);分组卡片经 _group() 加入。"""
         page = QWidget()
         page.setProperty("class", "page")
         v = QVBoxLayout(page)
-        v.setContentsMargins(16, 8, 4, 8)
-        head = QLabel(title)
-        head.setProperty("class", "subtitle")
-        v.addWidget(head)
+        v.setContentsMargins(14, 6, 2, 8)
+        v.setSpacing(12)
+        v.addStretch(1)  # 底部弹簧,分组卡片靠上对齐
+        return page, v
+
+    def _group(self, page_layout: "QVBoxLayout", title: str) -> "QFormLayout":
+        """在页内插入一个分组卡片(小标题 + 表单),返回表单布局。插到弹簧前。"""
         card = QFrame()
         card.setProperty("class", "card")
-        form = QFormLayout(card)
-        form.setContentsMargins(16, 12, 16, 12)
-        form.setVerticalSpacing(6)
-        v.addWidget(card)
-        v.addStretch(1)
-        return page, form
+        cv = QVBoxLayout(card)
+        cv.setContentsMargins(16, 12, 16, 14)
+        cv.setSpacing(4)
+        if title:
+            head = QLabel(title)
+            head.setProperty("class", "grouptitle")
+            cv.addWidget(head)
+        form = QFormLayout()
+        form.setContentsMargins(0, 4, 0, 0)
+        form.setVerticalSpacing(8)
+        form.setHorizontalSpacing(18)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        cv.addLayout(form)
+        page_layout.insertWidget(page_layout.count() - 1, card)
+        return form
 
-    def _row(self, form: QFormLayout, label: str, widget, desc: str) -> None:
+    def _row(self, form: QFormLayout, label: str, widget, desc: str = "") -> None:
         form.addRow(label, widget)
         if desc:
             hint = QLabel(desc)
@@ -125,6 +147,9 @@ class SettingsDialog(QDialog):
             return
         _w, getter, _s = self._fields[key]
         self._cfg.set(key, getter())
+        # 用户手填屏幕尺寸即视为已确认,不再自动提示
+        if key == "display/screen_diag_inch":
+            self._cfg.set("display/screen_diag_detected", True)
         if key in _RESTART_KEYS:
             self._restart_timer.start()
         else:
@@ -139,11 +164,13 @@ class SettingsDialog(QDialog):
         w.valueChanged.connect(lambda _v, k=key: self._on_field_changed(k))
         return w
 
-    def _dspin(self, key, lo, hi, step=0.5, decimals=2):
+    def _dspin(self, key, lo, hi, step=0.5, decimals=2, suffix=""):
         w = QDoubleSpinBox()
         w.setRange(lo, hi)
         w.setSingleStep(step)
         w.setDecimals(decimals)
+        if suffix:
+            w.setSuffix(suffix)
         self._fields[key] = (w, w.value, w.setValue)
         w.valueChanged.connect(lambda _v, k=key: self._on_field_changed(k))
         return w
@@ -154,8 +181,10 @@ class SettingsDialog(QDialog):
         w.toggled.connect(lambda _v, k=key: self._on_field_changed(k))
         return w
 
-    def _text(self, key):
+    def _text(self, key, placeholder=""):
         w = QLineEdit()
+        if placeholder:
+            w.setPlaceholderText(placeholder)
         self._fields[key] = (w, w.text, w.setText)
         w.editingFinished.connect(lambda k=key: self._on_field_changed(k))
         return w
@@ -165,10 +194,13 @@ class SettingsDialog(QDialog):
         box = QWidget()
         h = QHBoxLayout(box)
         h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(10)
         w = QSlider(Qt.Orientation.Horizontal)
         w.setRange(lo, hi)
         val = QLabel()
-        val.setFixedWidth(44)
+        val.setFixedWidth(52)
+        val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        val.setProperty("class", "sliderval")
         val.setText(fmt(w.value()))
         w.valueChanged.connect(lambda v: val.setText(fmt(v)))
         h.addWidget(w, 1)
@@ -178,10 +210,11 @@ class SettingsDialog(QDialog):
         w.valueChanged.connect(lambda _v, k=key: self._on_field_changed(k))
         return box
 
-    def _hand_combo(self, key):
+    def _combo(self, key, items):
+        """items: [(显示文本, data), ...];getter 返回 currentData。"""
         w = QComboBox()
-        w.addItem("右手", "Right")
-        w.addItem("左手", "Left")
+        for text, data in items:
+            w.addItem(text, data)
 
         def getter():
             return w.currentData()
@@ -194,11 +227,14 @@ class SettingsDialog(QDialog):
         w.currentIndexChanged.connect(lambda _i, k=key: self._on_field_changed(k))
         return w
 
+    def _hand_combo(self, key):
+        return self._combo(key, [("右手", "Right"), ("左手", "Left")])
+
     def _monitor_combo(self, key):
         w = QComboBox()
         for i, s in enumerate(QGuiApplication.screens()):
             g = s.geometry()
-            w.addItem(f"显示器 {i} ({g.width()}x{g.height()})")
+            w.addItem(f"显示器 {i}  ·  {g.width()}×{g.height()}")
         if w.count() == 0:
             w.addItem("显示器 0")
         self._fields[key] = (w, w.currentIndex, w.setCurrentIndex)
@@ -207,6 +243,7 @@ class SettingsDialog(QDialog):
 
     def _color_button(self, key):
         w = QPushButton()
+        w.setFixedHeight(30)
 
         def getter():
             return w.property("color_hex") or "#000000"
@@ -219,7 +256,8 @@ class SettingsDialog(QDialog):
             r, g, b = (int(hexval[i:i + 2], 16) for i in (0, 2, 4))
             luminance = r * 0.299 + g * 0.587 + b * 0.114
             text_color = "black" if luminance > 140 else "white"
-            w.setStyleSheet(f"background-color: {value}; color: {text_color};")
+            w.setStyleSheet(f"background-color: {value}; color: {text_color};"
+                            " border-radius: 6px; border: 1px solid rgba(0,0,0,0.15);")
 
         def pick(_=False):
             from PySide6.QtWidgets import QColorDialog
@@ -234,89 +272,131 @@ class SettingsDialog(QDialog):
 
     # ---- 四页 ----
     def _camera_page(self):
-        page, form = self._page("摄像头")
-        self._row(form, "设备索引", self._spin("camera/index", 0, 8),
+        page, v = self._page()
+        f = self._group(v, "采集设备")
+        self._row(f, "设备索引", self._spin("camera/index", 0, 8),
                   "多摄像头时选择设备;改动约半秒后自动重启识别")
-        self._row(form, "画面宽度", self._spin("camera/width", 320, 1920),
+        f2 = self._group(v, "画面")
+        self._row(f2, "宽度", self._spin("camera/width", 320, 1920),
                   "更高分辨率更准但更耗 CPU")
-        self._row(form, "画面高度", self._spin("camera/height", 240, 1080), "")
-        self._row(form, "水平视场角(°)",
-                  self._dspin("camera/fov_deg", 30.0, 120.0, 1.0, 1),
+        self._row(f2, "高度", self._spin("camera/height", 240, 1080), "")
+        self._row(f2, "水平视场角",
+                  self._dspin("camera/fov_deg", 30.0, 120.0, 1.0, 1, " °"),
                   "用于估算你与屏幕的距离,普通摄像头约 60°")
         return page
 
     def _interaction_page(self):
-        page, form = self._page("交互")
-        self._row(form, "控制手", self._hand_combo("interaction/active_hand"),
+        page, v = self._page()
+        f = self._group(v, "控制")
+        self._row(f, "控制手", self._hand_combo("interaction/active_hand"),
                   "只有选定的这只手可以控制鼠标")
-        self._row(form, "边缘留白",
+        self._row(f, "边缘留白",
                   self._slider("interaction/box_margin", 5, 30,
                                lambda v: v / 100.0,
                                lambda s: round(float(s) * 100),
                                lambda v: f"{v}%"),
                   "交互框四边留白,越大手臂移动越省力")
-        self._row(form, "跟手程度",
+
+        fs = self._group(v, "平滑(抑抖)")
+        self._row(fs, "算法",
+                  self._combo("interaction/smooth_algo",
+                              [("卡尔曼滤波(推荐)", "kalman"),
+                               ("One Euro", "one_euro")]),
+                  "卡尔曼匀速更稳、几乎无滞后;One Euro 变向响应更快")
+        self._row(fs, "稳定程度",
+                  self._slider("interaction/kalman_measure", 1, 20,
+                               lambda v: float(v),
+                               lambda s: round(float(s)),
+                               lambda v: f"{v}"),
+                  "卡尔曼:越大越平滑、抑制手抖越强(跟手略降)")
+        self._row(fs, "响应速度",
+                  self._slider("interaction/kalman_process", 200, 8000,
+                               lambda v: float(v),
+                               lambda s: round(float(s)),
+                               lambda v: f"{v}"),
+                  "卡尔曼:越大越跟手;抖动明显可调低")
+        self._row(fs, "跟手程度",
                   self._slider("interaction/smooth_min_cutoff", 1, 50,
                                lambda v: v / 10.0,
                                lambda s: round(float(s) * 10),
                                lambda v: f"{v/10:.1f}"),
-                  "越低越平滑,越高越跟手")
-        self._row(form, "点击最长保持(ms)",
+                  "One Euro:越低越平滑,越高越跟手")
+
+        fg = self._group(v, "手势")
+        self._row(fg, "点击最长保持",
                   self._spin("interaction/click_max_ms", 100, 600),
                   "捏合超过该时长视为拖拽")
-        self._row(form, "OK 停留时长(ms)",
+        self._row(fg, "OK 停留时长",
                   self._spin("interaction/ok_hold_ms", 200, 1500), "")
-        self._row(form, "手势冷却(ms)",
+        self._row(fg, "手势冷却",
                   self._spin("interaction/cooldown_ms", 100, 1500), "")
         for key, label in (("gestures/left_click", "左键(拇指+食指捻)"),
                            ("gestures/right_click", "右键(拇指+中指捻)"),
                            ("gestures/scroll", "滚动(三指捻移动)"),
                            ("gestures/enter", "回车(OK 手势)"),
                            ("gestures/backspace", "退格(推手)")):
-            form.addRow(self._check(key, label))
+            fg.addRow(self._check(key, label))
         return page
 
     def _display_page(self):
-        page, form = self._page("显示")
-        self._row(form, "屏幕对角线(英寸)",
-                  self._dspin("display/screen_diag_inch", 10.0, 300.0, 1.0, 1),
-                  "屏幕越大或人越远,手部影子按比例放大")
-        self._row(form, "影子不透明度",
+        page, v = self._page()
+        f = self._group(v, "屏幕")
+        self._row(f, "目标显示器", self._monitor_combo("display/monitor"), "")
+        self._row(f, "屏幕对角线",
+                  self._dspin("display/screen_diag_inch", 10.0, 300.0, 0.5, 1, " 英寸"),
+                  "启动时自动检测;检测不到请手动填写,影响手影物理大小")
+        self._row(f, "摄像头到屏幕距离",
+                  self._dspin("display/camera_screen_offset_m", -2.0, 10.0, 0.1, 1, " m"),
+                  "摄像头装在屏幕前方时填正值;0 表示摄像头就在屏幕平面(如笔记本)")
+
+        fa = self._group(v, "手影外观")
+        self._row(fa, "不透明度",
                   self._slider("display/overlay_opacity", 10, 100,
                                lambda v: v / 100.0,
                                lambda s: round(float(s) * 100),
                                lambda v: f"{v}%"), "")
-        self._row(form, "影子颜色", self._color_button("display/overlay_color"),
+        self._row(fa, "颜色", self._color_button("display/overlay_color"),
                   "深色背景下可改浅色提高可见度")
-        self._row(form, "摄像头到屏幕距离(米)",
-                  self._dspin("display/camera_screen_offset_m", -2.0, 10.0, 0.1, 1),
-                  "摄像头装在屏幕前方时填正值;0 表示摄像头就在屏幕平面(如笔记本)")
-        self._row(form, "手影大小倍率",
+        self._row(fa, "边缘辉光",
+                  self._slider("display/glow_intensity", 0, 200,
+                               lambda v: v / 100.0,
+                               lambda s: round(float(s) * 100),
+                               lambda v: f"{v}%"),
+                  "手影外圈的亮白光晕,暗背景下更清晰;0 关闭")
+
+        fz = self._group(v, "手影大小")
+        self._row(fz, "大小倍率",
                   self._slider("display/hand_scale_multiplier", 50, 300,
                                lambda v: v / 100.0,
                                lambda s: round(float(s) * 100),
                                lambda v: f"{v}%"),
                   "物理模型算完后的整体微调,大屏看不清就调大")
-        self._row(form, "手影最大高度",
+        self._row(fz, "最大高度",
                   self._slider("display/hand_max_screen_fraction", 10, 60,
                                lambda v: v / 100.0,
                                lambda s: round(float(s) * 100),
                                lambda v: f"{v}%"),
-                  "手影高度上限,占屏幕高度的比例;超过时自动收缩并收进屏幕")
-        self._row(form, "目标显示器", self._monitor_combo("display/monitor"), "")
+                  "手影高度上限(占屏幕高度比例);超过时自动收缩并收进屏幕")
         return page
 
     def _general_page(self):
-        page, form = self._page("通用")
-        self._row(form, "", self._check("general/autostart", "开机自动启动"), "")
-        self._row(form, "暂停快捷键", self._text("general/pause_hotkey"),
+        page, v = self._page()
+        f = self._group(v, "快捷键")
+        self._row(f, "暂停 / 恢复",
+                  self._text("general/pause_hotkey", "<ctrl>+<alt>+p"),
                   "pynput 组合键语法,留空禁用;默认 Ctrl+Alt+P")
+        self._row(f, "打开设置",
+                  self._text("general/settings_hotkey", "<ctrl>+<alt>+s"),
+                  "唤起本设置窗口的全局快捷键,留空禁用;默认 Ctrl+Alt+S")
+
+        fs = self._group(v, "系统")
+        self._row(fs, "", self._check("general/autostart", "开机自动启动"), "")
         return page
 
     # ---- 状态卡 ----
     _STATE_TEXT = {
         "active": ("● 使用中", theme.OK),
-        "paused": ("● 已暂停(不控制鼠标)", theme.TEXT_MUTED),
+        "paused": ("● 已暂停(摄像头已关闭)", theme.TEXT_MUTED),
         "permission": ("● 等待权限授权", theme.WARN),
         "error": ("● 摄像头异常", theme.DANGER),
     }
@@ -329,8 +409,10 @@ class SettingsDialog(QDialog):
 
     def refresh_hotkey_label(self) -> None:
         key = format_hotkey(self._cfg.get("general/pause_hotkey"))
+        skey = format_hotkey(self._cfg.get("general/settings_hotkey"))
         self._hotkey_line.setText(
-            f'切换快捷键:<b>{html.escape(key)}</b>(在"通用"页可修改)')
+            f"暂停/恢复:<b>{html.escape(key)}</b>    "
+            f"打开设置:<b>{html.escape(skey)}</b>(在「通用」页可修改)")
 
     # ---- 加载/应用/恢复 ----
     def field_widget(self, key):
@@ -354,6 +436,8 @@ class SettingsDialog(QDialog):
         self._loading = True
         try:
             for key in self._fields:
+                if key == "display/screen_diag_detected":
+                    continue
                 self._cfg.set(key, DEFAULTS[key])
             self._load()
             self.refresh_hotkey_label()

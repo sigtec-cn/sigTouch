@@ -36,6 +36,17 @@ def select_hand(hands, wanted):
     return best
 
 
+# 自拍镜像(vision 已 cv2.flip)下,MediaPipe 的 handedness 标签相对用户真实
+# 左右手是反的:用户举右手,镜像后出现在画面左侧,被标为 "Left"。用户语义
+# ("用右手控制")需映射到镜像标签("Left")才能选中正确的手。
+_MIRROR_LABEL = {"Right": "Left", "Left": "Right"}
+
+
+def mediapipe_label_for(user_hand: str) -> str:
+    """用户语义左右手 → 镜像画面下 MediaPipe 实际标签。"""
+    return _MIRROR_LABEL.get(user_hand, user_hand)
+
+
 def select_primary_face(faces):
     """取瞳距像素最大(离摄像头最近)的脸;空列表返回 None。"""
     best = None
@@ -76,8 +87,10 @@ class PerceptionPipeline:
                  [(p.x, p.y, p.z) for p in lms])
                 for i, lms in enumerate(hres.hand_landmarks)
             ]
-            picked = select_hand(candidates, self._active_hand)
+            # 用户语义(active_hand)→ 镜像下 MediaPipe 标签,再据此过滤
+            picked = select_hand(candidates, mediapipe_label_for(self._active_hand))
             if picked is not None:
+                # HandFrame.handedness 保留用户语义,palm_facing_camera 依赖它
                 hand = HandFrame(landmarks=picked,
                                  handedness=self._active_hand)
 

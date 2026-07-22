@@ -18,6 +18,10 @@ QLabel {{ color: {TEXT}; font-size: 13px; background: transparent; }}
 QLabel[class="title"] {{ font-size: 17px; font-weight: 600; }}
 QLabel[class="subtitle"] {{ font-size: 15px; font-weight: 600; }}
 QLabel[class="muted"] {{ color: {TEXT_MUTED}; font-size: 12px; }}
+QLabel[class="grouptitle"] {{ color: {TEXT_MUTED}; font-size: 11px;
+    font-weight: 700; letter-spacing: 0.5px; }}
+QLabel[class="sliderval"] {{ color: {ACCENT}; font-size: 13px;
+    font-weight: 600; }}
 QLabel[class="badge-ok"] {{ background: {OK}; color: white;
     border-radius: 9px; padding: 2px 10px; font-size: 12px; }}
 QLabel[class="badge-danger"] {{ background: {DANGER}; color: white;
@@ -28,6 +32,9 @@ QPushButton:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}
 QPushButton[class="primary"] {{ background: {ACCENT}; color: white; border: none; }}
 QPushButton[class="primary"]:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[class="primary"]:disabled {{ background: {BORDER}; color: {TEXT_MUTED}; }}
+QPushButton[class="ghost"] {{ background: transparent; border: 1px solid {BORDER};
+    color: {TEXT_MUTED}; }}
+QPushButton[class="ghost"]:hover {{ border-color: {DANGER}; color: {DANGER}; }}
 QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {{ background: {CARD};
     border: 1px solid {BORDER}; border-radius: 6px; padding: 4px 8px;
     font-size: 13px; color: {TEXT}; }}

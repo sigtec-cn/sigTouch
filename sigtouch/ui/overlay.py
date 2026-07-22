@@ -100,6 +100,17 @@ def silhouette_path(points, palm_size_px):
     return path.united(palm)
 
 
+def _stroke_path(path, width: float):
+    """把实心路径的轮廓转成指定宽度的描边区域(供辉光逐层外扩)。"""
+    stroker = QPainterPathStroker()
+    stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+    stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    stroker.setWidth(width)
+    outline = QPainterPath()
+    outline.addPath(path)
+    return stroker.createStroke(outline)
+
+
 class OverlayWindow(QWidget):
     def __init__(self, cfg: Config):
         super().__init__(None, Qt.WindowType.FramelessWindowHint
@@ -173,10 +184,25 @@ class OverlayWindow(QWidget):
             pts, anchor_idx, self.width(), self.height(),
             self._cfg.get("display/hand_max_screen_fraction"))
         palm_px = math.dist(pts[0], pts[9])
+        sil = silhouette_path(pts, palm_px)
+
+        # 亮白辉光:剪影外缘由外到内逐层提亮,暗背景也能看清手影轮廓。
+        # 外扩宽度随手掌尺寸缩放,远端小手也有可见光晕。
+        glow = self._cfg.get("display/glow_intensity")
+        if glow > 0.0:
+            base = max(6.0, palm_px * 0.22) * glow
+            p.setPen(Qt.PenStyle.NoPen)
+            for i, (scale, alpha) in enumerate(
+                    ((2.6, 0.10), (1.8, 0.16), (1.2, 0.26), (0.6, 0.42))):
+                w = base * scale
+                g = QColor(255, 255, 255)
+                g.setAlphaF(min(1.0, alpha * glow))
+                p.fillPath(_stroke_path(sil, w), g)
+
         color = QColor(self._cfg.get("display/overlay_color"))
         color.setAlphaF(min(1.0, self._cfg.get("display/overlay_opacity")))
         p.setPen(Qt.PenStyle.NoPen)
-        p.fillPath(silhouette_path(pts, palm_px), color)
+        p.fillPath(sil, color)
 
         if self._feedback:
             wrist = pts[0]
