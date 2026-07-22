@@ -3,7 +3,7 @@ import pytest
 from sigtouch.config import Config
 from sigtouch.interaction import features as F
 from sigtouch.interaction.gestures import EventKind, GestureStateMachine
-from tests.hand_fixtures import open_hand, thumbs_left, thumbs_up
+from tests.hand_fixtures import open_hand, thumbs_left, thumbs_left_up_diagonal, thumbs_up
 
 
 def _machine():
@@ -54,6 +54,19 @@ def test_backspace_progress_reported():
     p = m.progress
     assert p is not None and p.kind == "backspace"
     assert 0.3 < p.fraction < 0.7
+
+
+def test_thumbs_left_hold_survives_thumb_drifting_up():
+    from tests.hand_fixtures import thumbs_left, thumbs_left_up_diagonal
+    m = _machine()
+    # 纯左起手,中途拇指略上飘(两谓词都满足),再回纯左 —— 保持不被踢,恰触发一次退格
+    frames = [(open_hand(), 0)]
+    for i in range(1, 70):
+        t = 33 * i
+        hand = thumbs_left_up_diagonal() if 20 <= i <= 30 else thumbs_left()
+        frames.append((hand, t))
+    evs = _run(m, frames)
+    assert [e.kind for e in evs] == [EventKind.BACKSPACE]   # 未因漂移重置计时
 
 
 def test_push_keys_removed_from_defaults():

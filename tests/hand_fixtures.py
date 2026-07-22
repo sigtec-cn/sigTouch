@@ -74,6 +74,30 @@ def three_pinch(**kw) -> HandFrame:
                      16: (wx + 0.03 * scale, wy - 0.05 * scale), 20: (wx + 0.06 * scale, wy - 0.04 * scale)})
 
 
+def thumbs_left_up_diagonal(**kw) -> HandFrame:
+    """拇指左上对角:拇指尖相对指根同时向左(-0.07*scale)和向上(-0.07*scale)偏移,
+    使 leftward≈upward≈0.7×palm_size,均超过 0.6×palm 阈值——is_thumbs_left 与
+    is_thumbs_up 同时判 True。用于模拟"保持 THUMBS_LEFT 时拇指略微上飘"的边界抖动,
+    验证保持态不会被误判回 IDLE(见 tests/test_thumbs_left.py)。"""
+    h = open_hand(**kw)
+    scale, dx, dy = _get_scale_dx_dy(**kw)
+    wx, wy, _ = h.landmarks[0]   # 腕
+    mcp_x, mcp_y = wx - 0.03 * scale, wy - 0.01 * scale
+    tip_x, tip_y = mcp_x - 0.07 * scale, mcp_y - 0.07 * scale
+    changes = {
+        1: (wx - 0.015 * scale, wy - 0.005 * scale),
+        2: (mcp_x, mcp_y),
+        3: (mcp_x - 0.045 * scale, mcp_y - 0.035 * scale),
+        4: (tip_x, tip_y),   # 拇指尖,左上对角
+        # 四指弯曲:指尖收回靠近腕(指尖到腕距离 < 指根到腕距离)
+        8: (wx - 0.01 * scale, wy - 0.02 * scale),
+        12: (wx + 0.0 * scale, wy - 0.02 * scale),
+        16: (wx + 0.03 * scale, wy - 0.02 * scale),
+        20: (wx + 0.06 * scale, wy - 0.01 * scale),
+    }
+    return _with(h, changes)
+
+
 def ok_pose(**kw) -> HandFrame:
     """OK 手势:拇指食指成环,中/无名/小指伸直(仅移动拇指)。"""
     h = open_hand(**kw)

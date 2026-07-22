@@ -16,11 +16,17 @@ def qapp():
 
 
 def test_all_icons_render_nonnull(qapp):
-    from sigtouch.ui.lucide import icon
+    from sigtouch.ui.lucide import icon, _SUPERSAMPLE
     for name in NAMES:
-        ic = icon(name)
+        ic = icon(name, size=16)
         assert not ic.isNull(), name
         assert not ic.pixmap(16, 16).isNull(), name
+        # Retina 保真:source pixmap 须以 _SUPERSAMPLE 倍物理分辨率保存(不预先降采样
+        # 到 16x16),以便高 DPI 屏按 devicePixelRatio 取用时依旧清晰。
+        sizes = ic.availableSizes()
+        assert sizes, name
+        assert sizes[0].width() == 16 * _SUPERSAMPLE, name
+        assert sizes[0].height() == 16 * _SUPERSAMPLE, name
 
 
 def test_unknown_name_raises(qapp):

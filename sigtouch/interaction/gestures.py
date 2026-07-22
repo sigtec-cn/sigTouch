@@ -84,14 +84,6 @@ class GestureStateMachine:
     def pinching(self) -> bool:
         return self._state in _PINCH_STATES
 
-    # 供 overlay 反馈图标(兼容旧接口):触发帧返回对应符号
-    @property
-    def feedback(self) -> str | None:
-        if self.progress is not None and self.progress.fired:
-            return {"left_click": "●", "right_click": "●",
-                    "enter": "⏎", "backspace": "⌫"}.get(self.progress.kind)
-        return None
-
     def _cooled(self, kind: EventKind, t_ms: int) -> bool:
         return t_ms >= self._cooldown_until.get(kind, 0)
 
@@ -176,7 +168,11 @@ class GestureStateMachine:
             self._update_thumbs_up(hand, t_ms, out, thumbs_up)
 
         elif self._state is _State.THUMBS_LEFT:
-            self._update_thumbs_left(hand, t_ms, out, thumbs_left)
+            # 保持态用未经 thumbs_up 互斥门控的原始谓词:拇指长时略微上飘时两姿态
+            # 判定重叠(is_thumbs_left 与 is_thumbs_up 都为 True),门控值会被判 False
+            # 而误把保持踢回 IDLE、重置 1500ms 计时。进入态(上面 IDLE 分支)仍用门控值,
+            # 保证只有"纯"向左姿态才能从 IDLE 进入 THUMBS_LEFT(竖拇指优先)。
+            self._update_thumbs_left(hand, t_ms, out, F.is_thumbs_left(hand))
 
         return out
 
