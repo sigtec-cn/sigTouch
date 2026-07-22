@@ -6,12 +6,13 @@ from PySide6.QtWidgets import (QDialog, QFrame, QGridLayout, QHBoxLayout,
 
 from sigtouch.platformsupport import permissions as perms
 from sigtouch.platformsupport.permissions import PermissionKind
+from sigtouch.ui import lucide, theme
 from sigtouch.ui.theme import repolish
 
 _ROWS = [
-    (PermissionKind.CAMERA, "📷", "摄像头", "识别手部与人脸(核心功能)"),
-    (PermissionKind.ACCESSIBILITY, "🖱️", "辅助功能", "控制鼠标与键盘(手势注入)"),
-    (PermissionKind.INPUT_MONITORING, "⌨️", "输入监控", "全局暂停快捷键"),
+    (PermissionKind.CAMERA, "camera", "摄像头", "识别手部与人脸(核心功能)"),
+    (PermissionKind.ACCESSIBILITY, "mouse-pointer", "辅助功能", "控制鼠标与键盘(手势注入)"),
+    (PermissionKind.INPUT_MONITORING, "keyboard", "输入监控", "全局暂停快捷键"),
 ]
 _POLL_MS = 2000
 _CLOSE_DELAY_MS = 2000
@@ -31,6 +32,8 @@ class PermissionWizard(QDialog):
         self._restart_hint = restart_hint
         self._was_all_granted = False
         self._status_labels: dict[PermissionKind, QLabel] = {}
+        self._badge_containers: dict[PermissionKind, QFrame] = {}
+        self._badge_icons: dict[PermissionKind, QLabel] = {}
         self._request_buttons: dict[PermissionKind, QPushButton] = {}
         self._open_buttons: dict[PermissionKind, QPushButton] = {}
 
@@ -47,26 +50,35 @@ class PermissionWizard(QDialog):
 
         self._banner = QFrame()
         self._banner.setProperty("class", "banner-ok")
-        btext = QLabel("✓ 全部权限已就绪,SigTouch 已自动激活")
+        bicon = QLabel()
+        bicon.setPixmap(lucide.icon("check", "white", 16).pixmap(16, 16))
+        bicon.setStyleSheet("background: transparent;")
+        btext = QLabel("全部权限已就绪,SigTouch 已自动激活")
         btext.setStyleSheet("color: white; font-weight: 600; background: transparent;")
         bl = QHBoxLayout(self._banner)
         bl.setContentsMargins(14, 8, 14, 8)
+        bl.setSpacing(8)
+        bl.addWidget(bicon)
         bl.addWidget(btext)
+        bl.addStretch(1)
         self._banner.setVisible(False)
         layout.addWidget(self._banner)
 
-        for kind, icon, name, why in _ROWS:
+        for kind, icon_name, name, why in _ROWS:
             card = QFrame()
             card.setProperty("class", "card")
             grid = QGridLayout(card)
             grid.setContentsMargins(14, 10, 14, 10)
-            ic = QLabel(icon)
-            ic.setStyleSheet("font-size: 22px; background: transparent;")
+            ic = QLabel()
+            ic.setPixmap(lucide.icon(icon_name, theme.TEXT_MUTED, 20).pixmap(20, 20))
+            ic.setStyleSheet("background: transparent;")
             grid.addWidget(ic, 0, 0, 2, 1)
             head = QLabel(f"<b>{name}</b>")
             grid.addWidget(head, 0, 1)
-            badge = QLabel()
-            self._status_labels[kind] = badge
+            badge, badge_icon, badge_text = self._make_badge()
+            self._badge_containers[kind] = badge
+            self._badge_icons[kind] = badge_icon
+            self._status_labels[kind] = badge_text
             grid.addWidget(badge, 0, 2)
             hint = QLabel(why)
             hint.setProperty("class", "muted")
@@ -85,11 +97,17 @@ class PermissionWizard(QDialog):
         self._restart_row.setProperty("class", "card")
         rl = QHBoxLayout(self._restart_row)
         rl.setContentsMargins(14, 8, 14, 8)
-        warn = QLabel("⚠️ 快捷键需重启应用后生效")
+        rl.setSpacing(8)
+        warn_icon = QLabel()
+        warn_icon.setPixmap(lucide.icon("triangle-alert", theme.WARN, 16).pixmap(16, 16))
+        warn_icon.setStyleSheet("background: transparent;")
+        rl.addWidget(warn_icon)
+        warn = QLabel("快捷键需重启应用后生效")
         rl.addWidget(warn)
         rl.addStretch(1)
         self._restart_button = QPushButton("重启应用")
         self._restart_button.setProperty("class", "primary")
+        self._restart_button.setIcon(lucide.icon("rotate-cw", "white", 14))
         self._restart_button.clicked.connect(self.restart_requested)
         rl.addWidget(self._restart_button)
         self._restart_row.setVisible(False)
@@ -100,6 +118,20 @@ class PermissionWizard(QDialog):
         self._timer.timeout.connect(self.refresh)
         self._timer.start(_POLL_MS)
         self.refresh()
+
+    def _make_badge(self) -> "tuple[QFrame, QLabel, QLabel]":
+        """构造一个权限徽章容器:icon QLabel(12px) + text QLabel,badge-ok/danger 类挂容器上。"""
+        container = QFrame()
+        hl = QHBoxLayout(container)
+        hl.setContentsMargins(10, 2, 10, 2)
+        hl.setSpacing(4)
+        icon = QLabel()
+        icon.setStyleSheet("background: transparent;")
+        text = QLabel()
+        text.setStyleSheet("color: white; background: transparent;")
+        hl.addWidget(icon)
+        hl.addWidget(text)
+        return container, icon, text
 
     def _snapshot(self) -> dict:
         return self._checker() if self._checker else perms.snapshot()
@@ -112,11 +144,15 @@ class PermissionWizard(QDialog):
 
     def refresh(self) -> None:
         snap = self._snapshot()
-        for kind, badge in self._status_labels.items():
+        for kind, text_label in self._status_labels.items():
             ok = bool(snap.get(kind, True))
-            badge.setText("✓ 已授权" if ok else "✗ 未授权")
-            badge.setProperty("class", "badge-ok" if ok else "badge-danger")
-            repolish(badge)
+            text_label.setText("已授权" if ok else "未授权")
+            icon_label = self._badge_icons[kind]
+            icon_label.setPixmap(
+                lucide.icon("check" if ok else "x", "white", 12).pixmap(12, 12))
+            container = self._badge_containers[kind]
+            container.setProperty("class", "badge-ok" if ok else "badge-danger")
+            repolish(container)
             self._request_buttons[kind].setEnabled(not ok)
         granted = all(snap.values())
         self._banner.setVisible(granted)

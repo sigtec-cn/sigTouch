@@ -22,10 +22,8 @@ QLabel[class="grouptitle"] {{ color: {TEXT_MUTED}; font-size: 11px;
     font-weight: 700; letter-spacing: 0.5px; }}
 QLabel[class="sliderval"] {{ color: {ACCENT}; font-size: 13px;
     font-weight: 600; }}
-QLabel[class="badge-ok"] {{ background: {OK}; color: white;
-    border-radius: 9px; padding: 2px 10px; font-size: 12px; }}
-QLabel[class="badge-danger"] {{ background: {DANGER}; color: white;
-    border-radius: 9px; padding: 2px 10px; font-size: 12px; }}
+QFrame[class="badge-ok"] {{ background: {OK}; border-radius: 9px; }}
+QFrame[class="badge-danger"] {{ background: {DANGER}; border-radius: 9px; }}
 QPushButton {{ background: {CARD}; color: {TEXT}; border: 1px solid {BORDER};
     border-radius: 6px; padding: 6px 14px; font-size: 13px; }}
 QPushButton:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}

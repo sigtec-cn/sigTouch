@@ -13,12 +13,13 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QGuiApplication
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox,
                                QFormLayout, QFrame, QHBoxLayout, QLabel,
-                               QLineEdit, QListWidget, QPushButton, QSlider,
-                               QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
+                               QLineEdit, QListWidget, QListWidgetItem,
+                               QPushButton, QSlider, QSpinBox, QStackedWidget,
+                               QVBoxLayout, QWidget)
 
 from sigtouch.config import DEFAULTS, Config
 from sigtouch.interaction.hotkey import format_hotkey
-from sigtouch.ui import theme
+from sigtouch.ui import lucide, theme
 
 _RESTART_KEYS = frozenset({
     "camera/index", "camera/width", "camera/height", "camera/fov_deg",
@@ -26,7 +27,8 @@ _RESTART_KEYS = frozenset({
 })
 _DEBOUNCE_MS = 500
 _APPLY_DEBOUNCE_MS = 200
-_NAV_ITEMS = ["📷 摄像头", "✋ 交互", "🎨 显示", "⚙️ 通用"]
+_NAV_ITEMS = ["摄像头", "交互", "显示", "通用"]
+_NAV_ICONS = ["camera", "hand", "palette", "settings"]
 
 
 class SettingsDialog(QDialog):
@@ -58,15 +60,25 @@ class SettingsDialog(QDialog):
         sv = QVBoxLayout(status_card)
         sv.setContentsMargins(16, 12, 16, 12)
         sv.setSpacing(3)
+        badge_row = QHBoxLayout()
+        badge_row.setContentsMargins(0, 0, 0, 0)
+        badge_row.setSpacing(6)
+        self._status_icon = QLabel()
+        badge_row.addWidget(self._status_icon)
         self._status_badge = QLabel()
-        sv.addWidget(self._status_badge)
+        self._status_badge.setStyleSheet("font-weight: 600; background: transparent;")
+        badge_row.addWidget(self._status_badge)
+        badge_row.addStretch(1)
+        sv.addLayout(badge_row)
         self._hotkey_line = QLabel()
         self._hotkey_line.setProperty("class", "muted")
         sv.addWidget(self._hotkey_line)
 
         nav = QListWidget()
         nav.setFixedWidth(148)
-        nav.addItems(_NAV_ITEMS)
+        for text, icon_name in zip(_NAV_ITEMS, _NAV_ICONS):
+            item = QListWidgetItem(lucide.icon(icon_name, theme.TEXT, 16), text)
+            nav.addItem(item)
         self._stack = QStackedWidget()
         for build in (self._camera_page, self._interaction_page,
                       self._display_page, self._general_page):
@@ -411,10 +423,10 @@ class SettingsDialog(QDialog):
 
     # ---- 状态卡 ----
     _STATE_TEXT = {
-        "active": ("● 使用中", theme.OK),
-        "paused": ("● 已暂停(摄像头已关闭)", theme.TEXT_MUTED),
-        "permission": ("● 等待权限授权", theme.WARN),
-        "error": ("● 摄像头异常", theme.DANGER),
+        "active": ("使用中", theme.OK),
+        "paused": ("已暂停(摄像头已关闭)", theme.TEXT_MUTED),
+        "permission": ("等待权限授权", theme.WARN),
+        "error": ("摄像头异常", theme.DANGER),
     }
 
     def set_running_state(self, state: str) -> None:
@@ -422,6 +434,8 @@ class SettingsDialog(QDialog):
         self._status_badge.setText(text)
         self._status_badge.setStyleSheet(
             f"color: {color}; font-weight: 600; background: transparent;")
+        self._status_icon.setPixmap(
+            lucide.icon("circle", color, 10, fill=True).pixmap(10, 10))
 
     def refresh_hotkey_label(self) -> None:
         key = format_hotkey(self._cfg.get("general/pause_hotkey"))
